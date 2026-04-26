@@ -31,4 +31,7 @@ data/*.json
 
 # Generated DB and exports
 *.db
+*.db-shm
+*.db-wal
+*.db-journal
 backend/db/wayfarer-hotels-gmaps.csv
