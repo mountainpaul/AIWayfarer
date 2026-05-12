@@ -35,3 +35,13 @@ data/*.json
 *.db-wal
 *.db-journal
 backend/db/wayfarer-hotels-gmaps.csv
+
+.env
+.env.*
+!.env.example
+
+# Google OAuth credentials and tokens — never commit
+backend/secrets/*
+!backend/secrets/.gitkeep
+/secrets/
+
