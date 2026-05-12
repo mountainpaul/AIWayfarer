@@ -25,6 +25,9 @@ flutter/pubspec.lock
 .DS_Store
 Thumbs.db
 
+# MCP config (machine-specific paths)
+.mcp.json
+
 # Data (keep structure, ignore large exports)
 data/*.json
 !data/.gitkeep
