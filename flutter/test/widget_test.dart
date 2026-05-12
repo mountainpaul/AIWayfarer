@@ -15,6 +15,6 @@ void main() {
     // transitively depend on LocalDb.instance.init(), which needs path_provider
     // mocked and sqflite_common_ffi for in-memory storage. Tracked in
     // MANUAL_TODO — out of scope for v0.5.
-    skip: 'requires LocalDb test fixture (path_provider mock + sqflite_common_ffi)',
+    skip: true,
   );
 }
