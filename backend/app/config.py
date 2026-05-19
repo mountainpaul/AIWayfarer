@@ -2,7 +2,8 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv()  # backend/.env
+load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")  # project root .env
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 

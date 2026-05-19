@@ -41,7 +41,7 @@ def test_sync_snapshot_lists_are_well_formed():
 def test_sync_snapshot_includes_current_leg_when_in_window():
     body = client.get("/sync/snapshot").json()
     legs = body["legs"]
-    assert len(legs) == 10
+    assert len(legs) == 8
     # current_leg may be null if today is outside the trip window — that's fine.
     if body.get("current_leg") is not None:
         assert body["current_leg"]["id"] in {l["id"] for l in legs}

@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../models/chat_message.dart';
+import '../../../providers/quiet_mode_provider.dart';
 import 'iteration_panel.dart';
 
-class MessageBubble extends StatelessWidget {
+class MessageBubble extends ConsumerWidget {
   const MessageBubble({required this.message, super.key});
 
   final ChatMessage message;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final quietMode = ref.watch(quietModeProvider);
     final isUser = message.role == 'user';
     final scheme = Theme.of(context).colorScheme;
     final bg = isUser ? scheme.primaryContainer : scheme.surfaceContainerHighest;
@@ -31,7 +36,20 @@ class MessageBubble extends StatelessWidget {
               color: bg,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Text(message.content, style: TextStyle(color: fg)),
+            child: isUser
+                ? Text(message.content, style: TextStyle(color: fg))
+                : MarkdownBody(
+                    data: message.content,
+                    onTapLink: (text, href, title) {
+                      if (href != null) {
+                        launchUrl(Uri.parse(href),
+                            mode: LaunchMode.externalApplication);
+                      }
+                    },
+                    styleSheet:
+                        MarkdownStyleSheet.fromTheme(Theme.of(context))
+                            .copyWith(p: TextStyle(color: fg)),
+                  ),
           ),
           if (!isUser && message.confidence == 'low' &&
               message.clarifyingQuestion != null) ...[
@@ -45,7 +63,7 @@ class MessageBubble extends StatelessWidget {
               },
             ),
           ],
-          if (!isUser && message.iterations.isNotEmpty) ...[
+          if (!isUser && !quietMode && message.iterations.isNotEmpty) ...[
             const SizedBox(height: 6),
             IterationPanel(steps: message.iterations),
           ],

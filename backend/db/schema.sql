@@ -130,3 +130,12 @@ CREATE TABLE IF NOT EXISTS journal_entries (
 CREATE INDEX IF NOT EXISTS idx_journal_leg ON journal_entries(leg_id);
 CREATE INDEX IF NOT EXISTS idx_journal_type ON journal_entries(entry_type);
 CREATE INDEX IF NOT EXISTS idx_journal_created ON journal_entries(created_at);
+
+-- ── Briefings ────────────────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS briefings (
+    id          TEXT PRIMARY KEY,
+    date        TEXT NOT NULL UNIQUE,
+    markdown    TEXT NOT NULL,
+    created_at  TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);

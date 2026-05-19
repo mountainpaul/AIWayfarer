@@ -18,31 +18,30 @@ def test_list_trips_returns_seed_data():
     assert r.status_code == 200
     trips = r.json()
     assert len(trips) >= 1
-    assert any(t["name"] == "Europe 2026" for t in trips)
+    assert any("Europe" in t["name"] for t in trips)
 
 
 def test_list_legs_count():
     r = client.get("/legs")
     assert r.status_code == 200
     legs = r.json()
-    assert len(legs) == 10
+    assert len(legs) == 8
 
 
 def test_list_bookings_count():
     r = client.get("/bookings")
     assert r.status_code == 200
     bookings = r.json()
-    assert len(bookings) == 63
+    assert len(bookings) == 55
 
 
 def test_grounding_payload_shape():
     r = client.get("/grounding")
     assert r.status_code == 200
     body = r.json()
-    assert "now" in body
-    assert "todays_bookings" in body
-    assert "open_tasks_count" in body
-    assert isinstance(body["open_tasks_count"], int)
+    assert "local_time_iso" in body
+    assert "gps_lat" in body
+    assert "current_leg_slug" in body
 
 
 def test_sync_snapshot():

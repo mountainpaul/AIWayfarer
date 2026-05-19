@@ -207,12 +207,16 @@ class GPS(BaseModel):
 
 
 class GroundingPayload(BaseModel):
-    now: str
-    gps: Optional[GPS] = None
-    current_leg: Optional[dict] = None
-    todays_bookings: list[dict] = Field(default_factory=list)
-    open_tasks_count: int = 0
-    next_booking: Optional[dict] = None
+    """Accept the grounding shape sent by the Flutter app."""
+    gps_lat: Optional[float] = None
+    gps_lon: Optional[float] = None
+    gps_accuracy_m: Optional[float] = None
+    local_time_iso: str
+    timezone: Optional[str] = None
+    current_leg_id: Optional[str] = None
+    current_leg_slug: Optional[str] = None
+    current_trip_id: Optional[str] = None
+    next_booking_id: Optional[str] = None
 
 
 # ── Chat ────────────────────────────────────────────────────────

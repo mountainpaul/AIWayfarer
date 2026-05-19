@@ -20,11 +20,9 @@ def chat(payload: ChatRequest, db: sqlite3.Connection = Depends(get_db)):
     if payload.grounding is not None:
         grounding = payload.grounding
     else:
-        grounding = grounding_svc.build_grounding_context(
-            db, gps=None, now=datetime.now(timezone.utc)
-        )
+        grounding = grounding_svc.build_grounding_context(db)
 
-    grounding_text = grounding_svc.grounding_to_text(grounding)
+    grounding_text = grounding_svc.grounding_to_text(grounding, db=db)
     system_prompt = critic_svc.build_system_prompt(grounding_text, payload.mode)
 
     try:

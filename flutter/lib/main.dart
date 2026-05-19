@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'app/app.dart';
+import 'providers/quiet_mode_provider.dart';
 import 'services/api_client.dart';
 import 'services/local_db.dart';
 
@@ -10,10 +11,10 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await LocalDb.instance.init();
 
-  // Hydrate the API base URL before any Dio is constructed, so the first
-  // request goes to the user's configured backend, not the Env default.
   final prefs = await SharedPreferences.getInstance();
   final storedBaseUrl = prefs.getString(ApiBaseUrlNotifier.prefsKey);
+  final storedQuietMode = prefs.getBool(QuietModeNotifier.prefsKey) ?? false;
+  final onboardingComplete = prefs.getBool('onboarding_complete') ?? false;
 
   runApp(
     ProviderScope(
@@ -22,8 +23,11 @@ Future<void> main() async {
           apiBaseUrlProvider.overrideWith(
             (_) => ApiBaseUrlNotifier(initial: storedBaseUrl),
           ),
+        quietModeProvider.overrideWith(
+          (_) => QuietModeNotifier(initial: storedQuietMode),
+        ),
       ],
-      child: const WayfarerApp(),
+      child: WayfarerApp(showOnboarding: !onboardingComplete),
     ),
   );
 }

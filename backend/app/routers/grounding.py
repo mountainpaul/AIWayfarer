@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 
 from ..db import get_db
-from ..models import GPS, GroundingPayload
+from ..models import GroundingPayload
 from ..services import grounding as grounding_svc
 
 router = APIRouter(prefix="/grounding", tags=["grounding"])
@@ -26,5 +26,8 @@ def get_grounding(
     else:
         when = datetime.now(timezone.utc)
 
-    gps = GPS(lat=lat, lon=lon) if (lat is not None and lon is not None) else None
-    return grounding_svc.build_grounding_context(db, gps=gps, now=when)
+    g = grounding_svc.build_grounding_context(db, now=when)
+    if lat is not None and lon is not None:
+        g.gps_lat = lat
+        g.gps_lon = lon
+    return g

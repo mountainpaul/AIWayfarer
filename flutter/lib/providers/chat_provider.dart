@@ -1,4 +1,7 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import '../models/chat_message.dart';
@@ -26,10 +29,40 @@ class ChatState {
 }
 
 class ChatNotifier extends StateNotifier<ChatState> {
-  ChatNotifier(this.ref) : super(ChatState());
+  ChatNotifier(this.ref) : super(ChatState()) {
+    _restore();
+  }
+
+  static const _prefsKey = 'chat_history';
+  static const _maxMessages = 100;
 
   final Ref ref;
   final _uuid = const Uuid();
+
+  Future<void> _restore() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_prefsKey);
+    if (raw == null) return;
+    try {
+      final list = (jsonDecode(raw) as List)
+          .map((e) => ChatMessage.fromJson(e as Map<String, dynamic>))
+          .toList();
+      state = state.copyWith(messages: list);
+    } catch (_) {
+      // Corrupted data — start fresh.
+    }
+  }
+
+  Future<void> _persist() async {
+    final prefs = await SharedPreferences.getInstance();
+    final trimmed = state.messages.length > _maxMessages
+        ? state.messages.sublist(state.messages.length - _maxMessages)
+        : state.messages;
+    await prefs.setString(
+      _prefsKey,
+      jsonEncode(trimmed.map((m) => m.toJson()).toList()),
+    );
+  }
 
   Future<void> send(String text) async {
     if (text.trim().isEmpty || state.sending) return;
@@ -63,9 +96,6 @@ class ChatNotifier extends StateNotifier<ChatState> {
         iterations: response.iterations,
         confidence: response.confidence,
         sources: response.sources,
-        // When the critic returns low confidence, the answer IS the
-        // clarifying question (per spec §3.4). Surface it so the UI chip
-        // renders.
         clarifyingQuestion:
             response.confidence == 'low' ? response.answer : null,
       );
@@ -73,13 +103,16 @@ class ChatNotifier extends StateNotifier<ChatState> {
         messages: [...state.messages, reply],
         sending: false,
       );
+      _persist();
     } catch (e) {
       state = state.copyWith(sending: false, error: e.toString());
+      _persist();
     }
   }
 
   void clear() {
     state = ChatState();
+    _persist();
   }
 }
 

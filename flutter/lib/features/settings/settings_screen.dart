@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../providers/quiet_mode_provider.dart';
 import '../../services/api_client.dart';
 
 /// Settings: API base URL, voice mode, push-to-talk vs wake-word.
@@ -14,7 +15,6 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late final TextEditingController _urlController;
-  bool _quietMode = false;
   bool _wakeWord = false;
 
   @override
@@ -92,8 +92,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           title: const Text('Quiet mode'),
           subtitle: const Text(
               'Hide draft -> critic iteration; show only the final answer.'),
-          value: _quietMode,
-          onChanged: (v) => setState(() => _quietMode = v),
+          value: ref.watch(quietModeProvider),
+          onChanged: (v) => ref.read(quietModeProvider.notifier).set(v),
         ),
         const SizedBox(height: 32),
       ],
