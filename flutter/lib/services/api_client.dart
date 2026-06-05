@@ -240,6 +240,24 @@ class ApiClient {
     }
   }
 
+  // ── Gmail Scanner ──────────────────────────────────────────
+  Future<Map<String, dynamic>> scanBookingEmails({int months = 6}) async {
+    final r = await _dio.post<Map<String, dynamic>>(
+      '/gmail/scan-bookings',
+      queryParameters: {'months': months},
+    );
+    return r.data ?? {};
+  }
+
+  Future<Map<String, dynamic>> importBookings(
+      List<Map<String, dynamic>> bookings) async {
+    final r = await _dio.post<Map<String, dynamic>>(
+      '/gmail/import-bookings',
+      data: bookings,
+    );
+    return r.data ?? {};
+  }
+
   // ── Sync ─────────────────────────────────────────────────
   Future<Map<String, dynamic>> syncSnapshot() async {
     final r = await _dio.get<Map<String, dynamic>>('/sync/snapshot');

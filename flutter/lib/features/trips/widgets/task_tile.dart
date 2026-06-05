@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../models/task.dart';
 import '../../../providers/trip_provider.dart';
+import 'task_form.dart';
 
 class TaskTile extends ConsumerWidget {
   const TaskTile({required this.task, super.key});
@@ -20,6 +21,47 @@ class TaskTile extends ConsumerWidget {
       case 'low':
       default:
         return Colors.grey;
+    }
+  }
+
+  Future<void> _edit(BuildContext context, WidgetRef ref) async {
+    final payload = await showTaskForm(
+      context,
+      legId: task.legId ?? '',
+      existing: task,
+    );
+    if (payload == null) return;
+    final ok =
+        await ref.read(tripMutationsProvider).updateTask(task.id, payload);
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to update task')),
+      );
+    }
+  }
+
+  Future<void> _delete(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete task?'),
+        content: Text('Remove "${task.title}"?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final ok = await ref.read(tripMutationsProvider).deleteTask(task.id);
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to delete task')),
+      );
     }
   }
 
@@ -65,6 +107,16 @@ class TaskTile extends ConsumerWidget {
               Text('due ${task.dueDate}',
                   style: Theme.of(context).textTheme.bodySmall),
             ],
+          ],
+        ),
+        trailing: PopupMenuButton<String>(
+          onSelected: (v) {
+            if (v == 'edit') _edit(context, ref);
+            if (v == 'delete') _delete(context, ref);
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem(value: 'edit', child: Text('Edit')),
+            PopupMenuItem(value: 'delete', child: Text('Delete')),
           ],
         ),
       ),

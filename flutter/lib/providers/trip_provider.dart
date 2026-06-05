@@ -122,6 +122,66 @@ class TripMutations {
     }
   }
 
+  Future<bool> createBooking(Map<String, dynamic> payload) async {
+    try {
+      await ref.read(apiClientProvider).createBooking(payload);
+      await _refresh();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> updateBooking(String id, Map<String, dynamic> patch) async {
+    try {
+      await ref.read(apiClientProvider).patchBooking(id, patch);
+      await _refresh();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> deleteBooking(String id) async {
+    try {
+      await ref.read(apiClientProvider).deleteBooking(id);
+      await _refresh();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> createTask(Map<String, dynamic> payload) async {
+    try {
+      await ref.read(apiClientProvider).createTask(payload);
+      await _refresh();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> updateTask(String id, Map<String, dynamic> patch) async {
+    try {
+      await ref.read(apiClientProvider).patchTask(id, patch);
+      await _refresh();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> deleteTask(String id) async {
+    try {
+      await ref.read(apiClientProvider).deleteTask(id);
+      await _refresh();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<bool> addJournal({
     String? legId,
     required String content,

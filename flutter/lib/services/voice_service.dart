@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
@@ -12,6 +13,7 @@ class VoiceService {
 
   Future<bool> init() async {
     if (_initialized) return true;
+    if (kIsWeb) return false; // Speech/TTS not supported on web
     final ok = await _speech.initialize(
       onError: (_) {},
       onStatus: (_) {},

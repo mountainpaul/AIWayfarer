@@ -24,9 +24,20 @@ class TripsScreen extends ConsumerWidget {
             return ListView(
               children: [
                 Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Text(tripName,
-                      style: Theme.of(context).textTheme.headlineSmall),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(tripName,
+                            style: Theme.of(context).textTheme.headlineSmall),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.email_outlined),
+                        tooltip: 'Scan email for bookings',
+                        onPressed: () => context.go('/trips/scan-email'),
+                      ),
+                    ],
+                  ),
                 ),
                 ...legList.map((l) => Card(
                       child: ListTile(

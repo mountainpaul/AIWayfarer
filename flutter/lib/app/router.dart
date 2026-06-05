@@ -6,6 +6,7 @@ import '../features/chat/chat_screen.dart';
 import '../features/companion/companion_dashboard.dart';
 import '../features/home/home_screen.dart';
 import '../features/settings/settings_screen.dart';
+import '../features/trips/email_scan_screen.dart';
 import '../features/trips/leg_detail_screen.dart';
 import '../features/trips/trips_screen.dart';
 import '../providers/mode_provider.dart';
@@ -35,6 +36,10 @@ final routerProvider = Provider<GoRouter>((ref) {
                   legId: state.pathParameters['legId']!,
                 ),
               ),
+              GoRoute(
+                path: 'scan-email',
+                builder: (_, __) => const EmailScanScreen(),
+              ),
             ],
           ),
           GoRoute(
@@ -61,28 +66,75 @@ class _ShellScaffold extends ConsumerWidget {
     final mode = ref.watch(modeProvider);
     final location = GoRouterState.of(context).uri.path;
     final index = _indexForLocation(location);
+    final wide = MediaQuery.sizeOf(context).width >= 600;
+
+    final appBar = AppBar(
+      title: const Text('AI Wayfarer'),
+      actions: [
+        Row(
+          children: [
+            const Text('Plan'),
+            Switch(
+              value: mode == AppMode.companion,
+              onChanged: (v) {
+                ref.read(modeProvider.notifier).set(
+                      v ? AppMode.companion : AppMode.planning,
+                    );
+              },
+            ),
+            const Text('Companion'),
+            const SizedBox(width: 8),
+          ],
+        ),
+      ],
+    );
+
+    if (wide) {
+      return Scaffold(
+        appBar: appBar,
+        body: Row(
+          children: [
+            NavigationRail(
+              selectedIndex: index,
+              onDestinationSelected: (i) => _go(context, i),
+              labelType: NavigationRailLabelType.all,
+              destinations: const [
+                NavigationRailDestination(
+                  icon: Icon(Icons.today_outlined),
+                  selectedIcon: Icon(Icons.today),
+                  label: Text('Today'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.chat_bubble_outline),
+                  selectedIcon: Icon(Icons.chat_bubble),
+                  label: Text('Chat'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.map_outlined),
+                  selectedIcon: Icon(Icons.map),
+                  label: Text('Trips'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.explore_outlined),
+                  selectedIcon: Icon(Icons.explore),
+                  label: Text('Companion'),
+                ),
+                NavigationRailDestination(
+                  icon: Icon(Icons.settings_outlined),
+                  selectedIcon: Icon(Icons.settings),
+                  label: Text('Settings'),
+                ),
+              ],
+            ),
+            const VerticalDivider(thickness: 1, width: 1),
+            Expanded(child: child),
+          ],
+        ),
+      );
+    }
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('AI Wayfarer'),
-        actions: [
-          Row(
-            children: [
-              const Text('Plan'),
-              Switch(
-                value: mode == AppMode.companion,
-                onChanged: (v) {
-                  ref.read(modeProvider.notifier).set(
-                        v ? AppMode.companion : AppMode.planning,
-                      );
-                },
-              ),
-              const Text('Companion'),
-              const SizedBox(width: 8),
-            ],
-          ),
-        ],
-      ),
+      appBar: appBar,
       body: child,
       bottomNavigationBar: NavigationBar(
         selectedIndex: index,

@@ -29,7 +29,10 @@ def get_client() -> anthropic.Anthropic:
             "ANTHROPIC_API_KEY is not set. Set it in backend/.env to enable /chat and /briefing/generate."
         )
     if _client is None:
-        _client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY)
+        _client = anthropic.Anthropic(
+            api_key=config.ANTHROPIC_API_KEY,
+            timeout=180.0,
+        )
     return _client
 
 

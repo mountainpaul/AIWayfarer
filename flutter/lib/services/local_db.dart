@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -29,8 +30,13 @@ class LocalDb {
 
   Future<void> init() async {
     if (_db != null) return;
-    final dir = await getApplicationDocumentsDirectory();
-    final path = p.join(dir.path, Env.dbFileName);
+    late final String path;
+    if (kIsWeb) {
+      path = Env.dbFileName;
+    } else {
+      final dir = await getApplicationDocumentsDirectory();
+      path = p.join(dir.path, Env.dbFileName);
+    }
     _db = await openDatabase(
       path,
       version: 1,
