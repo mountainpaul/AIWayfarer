@@ -7,9 +7,11 @@ Uses the same Google OAuth credentials as calendar.py.
 
 from __future__ import annotations
 
+import base64
+import html
 import json
 import logging
-from typing import Optional
+import re
 
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -18,6 +20,15 @@ from . import google_auth
 from .claude import call_chat
 
 log = logging.getLogger(__name__)
+
+
+# Mirror the Literal enums in models.py. LLM output is untrusted, so we coerce
+# any out-of-set value to a safe default before it reaches the DB — a strict
+# Pydantic read model would otherwise 500 the whole /bookings list on one bad row.
+BOOKING_TYPES = {
+    "flight", "hotel", "ferry", "car", "train", "activity", "rifugio", "other",
+}
+BOOKING_STATUSES = {"booked", "pending", "needs_booking", "researching"}
 
 
 class GmailApiError(RuntimeError):
@@ -38,34 +49,51 @@ _BOOKING_QUERY = (
     "newer_than:{months}m"
 )
 
+_TAG_RE = re.compile(r"<[^>]+>")
+_WS_RE = re.compile(r"[ \t]*\n[ \t]*")
+
+
+def _decode_b64(data: str) -> str:
+    if not data:
+        return ""
+    return base64.urlsafe_b64decode(data).decode("utf-8", errors="replace")
+
+
+def _html_to_text(raw_html: str) -> str:
+    """Cheap HTML→text: drop script/style, strip tags, unescape entities."""
+    if not raw_html:
+        return ""
+    no_scripts = re.sub(
+        r"<(script|style)[^>]*>.*?</\1>", " ", raw_html, flags=re.DOTALL | re.IGNORECASE
+    )
+    text = _TAG_RE.sub(" ", no_scripts)
+    text = html.unescape(text)
+    # Collapse runs of blank lines/whitespace introduced by stripping.
+    text = re.sub(r"[ \t]{2,}", " ", text)
+    text = _WS_RE.sub("\n", text)
+    return text.strip()
+
+
+def _walk_parts(payload: dict, mime: str) -> str:
+    """Depth-first search for the first body of the given MIME type."""
+    if payload.get("mimeType", "").startswith(mime):
+        body = _decode_b64(payload.get("body", {}).get("data", ""))
+        if body:
+            return body
+    for part in payload.get("parts", []):
+        found = _walk_parts(part, mime)
+        if found:
+            return found
+    return ""
+
 
 def _get_message_body(msg: dict) -> str:
-    """Extract plain text body from a Gmail message."""
+    """Prefer text/plain; fall back to stripped text/html (many emails are HTML-only)."""
     payload = msg.get("payload", {})
-
-    # Simple single-part message
-    if payload.get("mimeType", "").startswith("text/plain"):
-        import base64
-        data = payload.get("body", {}).get("data", "")
-        if data:
-            return base64.urlsafe_b64decode(data).decode("utf-8", errors="replace")
-
-    # Multipart — find text/plain
-    for part in payload.get("parts", []):
-        if part.get("mimeType") == "text/plain":
-            import base64
-            data = part.get("body", {}).get("data", "")
-            if data:
-                return base64.urlsafe_b64decode(data).decode("utf-8", errors="replace")
-        # Nested multipart
-        for sub in part.get("parts", []):
-            if sub.get("mimeType") == "text/plain":
-                import base64
-                data = sub.get("body", {}).get("data", "")
-                if data:
-                    return base64.urlsafe_b64decode(data).decode("utf-8", errors="replace")
-
-    return ""
+    plain = _walk_parts(payload, "text/plain")
+    if plain:
+        return plain
+    return _html_to_text(_walk_parts(payload, "text/html"))
 
 
 def _get_header(headers: list[dict], name: str) -> str:
@@ -99,10 +127,6 @@ def fetch_booking_emails(months: int = 6, max_results: int = 50) -> list[dict]:
             ).execute()
 
             headers = msg.get("payload", {}).get("headers", [])
-            subject = _get_header(headers, "Subject")
-            sender = _get_header(headers, "From")
-            date = _get_header(headers, "Date")
-            snippet = msg.get("snippet", "")
             body = _get_message_body(msg)
 
             # Truncate body to avoid token bloat — snippets often suffice
@@ -111,10 +135,10 @@ def fetch_booking_emails(months: int = 6, max_results: int = 50) -> list[dict]:
 
             results.append({
                 "id": msg_ref["id"],
-                "subject": subject,
-                "sender": sender,
-                "date": date,
-                "snippet": snippet,
+                "subject": _get_header(headers, "Subject"),
+                "sender": _get_header(headers, "From"),
+                "date": _get_header(headers, "Date"),
+                "snippet": msg.get("snippet", ""),
                 "body": body,
             })
         except HttpError:
@@ -154,6 +178,15 @@ Return a JSON array of objects with these fields:
 """
 
 
+def _normalize_candidate(c: dict) -> dict:
+    """Coerce LLM output to safe enum values so it can't corrupt the bookings table."""
+    t = str(c.get("type") or "other").lower()
+    c["type"] = t if t in BOOKING_TYPES else "other"
+    s = str(c.get("status") or "booked").lower()
+    c["status"] = s if s in BOOKING_STATUSES else "booked"
+    return c
+
+
 def parse_bookings_with_claude(
     emails: list[dict],
     legs: list[dict],
@@ -190,12 +223,13 @@ def parse_bookings_with_claude(
 
     try:
         result = json.loads(raw)
-        if isinstance(result, list):
-            return result
     except json.JSONDecodeError:
         log.error("Failed to parse Claude response as JSON: %s", raw[:500])
+        return []
 
-    return []
+    if not isinstance(result, list):
+        return []
+    return [_normalize_candidate(c) for c in result if isinstance(c, dict)]
 
 
 def scan_and_parse(

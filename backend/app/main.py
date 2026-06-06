@@ -8,7 +8,7 @@ from .routers import (
     briefing,
     calendar,
     chat,
-    gmail_stub,
+    gmail,
     grounding,
     journal,
     legs,
@@ -47,7 +47,7 @@ def create_app() -> FastAPI:
     app.include_router(grounding.router)
     app.include_router(sync.router)
     app.include_router(calendar.router)
-    app.include_router(gmail_stub.router)
+    app.include_router(gmail.router)
 
     @app.get("/health", tags=["meta"])
     def health():
