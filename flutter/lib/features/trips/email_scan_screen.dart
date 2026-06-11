@@ -32,6 +32,8 @@ class _EmailScanScreenState extends ConsumerState<EmailScanScreen> {
 
     try {
       final result = await ref.read(apiClientProvider).scanBookingEmails();
+      // The scan takes 30-60s; the user may have navigated away by now.
+      if (!mounted) return;
       final raw = result['candidates'] as List<dynamic>? ?? [];
       final candidates = raw.cast<Map<String, dynamic>>();
 
@@ -46,6 +48,7 @@ class _EmailScanScreenState extends ConsumerState<EmailScanScreen> {
         }
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _scanning = false;
         _error = '$e';
@@ -65,7 +68,9 @@ class _EmailScanScreenState extends ConsumerState<EmailScanScreen> {
       final count = result['imported'] as int? ?? 0;
 
       // Refresh local data
+      if (!mounted) return;
       await ref.read(syncServiceProvider).snapshot();
+      if (!mounted) return;
       ref.read(syncTriggerProvider.notifier).state++;
 
       setState(() {
@@ -78,6 +83,7 @@ class _EmailScanScreenState extends ConsumerState<EmailScanScreen> {
         _selected.clear();
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _importing = false;
         _error = 'Import failed: $e';

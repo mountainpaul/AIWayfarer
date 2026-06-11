@@ -197,6 +197,23 @@ class LocalDb {
     await db.delete(table);
   }
 
+  /// Atomically replace the contents of several tables in one transaction.
+  /// If anything fails mid-way the old cache survives intact — never leave
+  /// the offline cache half-cleared.
+  Future<void> replaceAll(Map<String, List<Map<String, dynamic>>> tables) async {
+    await db.transaction((txn) async {
+      for (final entry in tables.entries) {
+        await txn.delete(entry.key);
+        final batch = txn.batch();
+        for (final r in entry.value) {
+          batch.insert(entry.key, _toSqlite(r),
+              conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+        await batch.commit(noResult: true);
+      }
+    });
+  }
+
   Map<String, dynamic> _toSqlite(Map<String, dynamic> r) {
     final out = Map<String, dynamic>.from(r);
     for (final k in _boolColumns) {

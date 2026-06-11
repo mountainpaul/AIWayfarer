@@ -34,6 +34,8 @@ extension LegX on Leg {
   bool containsDate(DateTime d) {
     final start = startDateTime;
     final end = endDateTime;
-    return !d.isBefore(start) && !d.isAfter(end.add(const Duration(days: 1)));
+    // Inclusive of the end date, exclusive of end+1 — otherwise the day after
+    // a leg ends still matches and the previous leg wins on transition days.
+    return !d.isBefore(start) && d.isBefore(end.add(const Duration(days: 1)));
   }
 }

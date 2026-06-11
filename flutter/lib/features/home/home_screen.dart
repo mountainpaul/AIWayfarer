@@ -18,11 +18,17 @@ class HomeScreen extends ConsumerWidget {
 
     return RefreshIndicator(
       onRefresh: () async {
+        final ok = await refreshFromBackend(ref);
         ref.invalidate(briefingProvider);
         ref.invalidate(currentLegProvider);
         ref.invalidate(nextBookingProvider);
         ref.invalidate(openTaskCountProvider);
-        ref.read(syncTriggerProvider.notifier).state++;
+        if (!ok && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('Backend unreachable — showing cached data')),
+          );
+        }
       },
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),

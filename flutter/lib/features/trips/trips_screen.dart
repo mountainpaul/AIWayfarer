@@ -8,6 +8,16 @@ import '../../providers/trip_provider.dart';
 class TripsScreen extends ConsumerWidget {
   const TripsScreen({super.key});
 
+  /// Loading/error states must stay scrollable or the pull-to-refresh
+  /// gesture is dead exactly when a retry is most needed.
+  static Widget _refreshable(Widget center) => ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: [
+          const SizedBox(height: 160),
+          Center(child: center),
+        ],
+      );
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final legs = ref.watch(legsProvider);
@@ -15,7 +25,13 @@ class TripsScreen extends ConsumerWidget {
 
     return RefreshIndicator(
       onRefresh: () async {
-        ref.read(syncTriggerProvider.notifier).state++;
+        final ok = await refreshFromBackend(ref);
+        if (!ok && context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+                content: Text('Backend unreachable — showing cached data')),
+          );
+        }
       },
       child: legs.when(
         data: (legList) => trips.when(
@@ -57,8 +73,8 @@ class TripsScreen extends ConsumerWidget {
           loading: () => const Center(child: CircularProgressIndicator()),
           error: (e, _) => Center(child: Text('$e')),
         ),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('$e')),
+        loading: () => _refreshable(const CircularProgressIndicator()),
+        error: (e, _) => _refreshable(Text('$e')),
       ),
     );
   }

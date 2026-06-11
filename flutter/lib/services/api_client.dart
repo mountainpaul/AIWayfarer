@@ -245,6 +245,9 @@ class ApiClient {
     final r = await _dio.post<Map<String, dynamic>>(
       '/gmail/scan-bookings',
       queryParameters: {'months': months},
+      // Gmail fetch + Claude parse regularly takes 30-60s+, beyond the
+      // global 60s receiveTimeout.
+      options: Options(receiveTimeout: const Duration(minutes: 3)),
     );
     return r.data ?? {};
   }

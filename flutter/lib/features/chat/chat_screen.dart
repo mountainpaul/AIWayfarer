@@ -28,9 +28,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   Future<void> _send() async {
     final text = _controller.text.trim();
-    if (text.isEmpty) return;
+    // Guard the Enter-key and PTT paths too — ChatNotifier.send() drops the
+    // message while another is in flight, and we'd have cleared the field.
+    if (text.isEmpty || ref.read(chatProvider).sending) return;
     _controller.clear();
     await ref.read(chatProvider.notifier).send(text);
+    // The user may have switched tabs during the LLM round-trip.
+    if (!mounted) return;
     _scrollToBottom();
 
     if (_voiceReply) {

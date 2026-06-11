@@ -9,21 +9,39 @@ def _connect(db_path: str) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    # Per-request connections can contend (e.g. an email import racing a task
+    # toggle from the phone); wait instead of raising "database is locked".
+    conn.execute("PRAGMA busy_timeout = 5000")
     return conn
 
 
 def apply_migrations() -> None:
-    """Apply any *.sql files under db/migrations in lexical order. Idempotent."""
-    migrations_dir: Path = config.MIGRATIONS_DIR
-    if not migrations_dir.is_dir():
-        return
-    files = sorted(p for p in migrations_dir.glob("*.sql") if p.is_file())
-    if not files:
-        return
+    """Bootstrap the base schema (idempotent), then run each db/migrations/*.sql
+    exactly once, tracked in schema_migrations."""
     conn = _connect(config.DB_PATH)
     try:
-        for path in files:
-            conn.executescript(path.read_text())
+        schema: Path = config.SCHEMA_PATH
+        if schema.is_file():
+            conn.executescript(schema.read_text())
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS schema_migrations (
+                   filename   TEXT PRIMARY KEY,
+                   applied_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+               )"""
+        )
+        applied = {
+            r["filename"]
+            for r in conn.execute("SELECT filename FROM schema_migrations")
+        }
+        if config.MIGRATIONS_DIR.is_dir():
+            for path in sorted(config.MIGRATIONS_DIR.glob("*.sql")):
+                if not path.is_file() or path.name in applied:
+                    continue
+                conn.executescript(path.read_text())
+                conn.execute(
+                    "INSERT INTO schema_migrations (filename) VALUES (?)",
+                    (path.name,),
+                )
         conn.commit()
     finally:
         conn.close()

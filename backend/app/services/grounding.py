@@ -38,9 +38,11 @@ def todays_bookings(db: sqlite3.Connection, date: str) -> list[dict]:
 
 
 def next_booking_after(db: sqlite3.Connection, iso_now: str) -> Optional[dict]:
+    # Compare on date(): start_date is date-only (YYYY-MM-DD) while iso_now is
+    # a full timestamp, and string ordering would skip everything dated today.
     row = db.execute(
         """SELECT * FROM bookings
-           WHERE start_date IS NOT NULL AND start_date >= ?
+           WHERE start_date IS NOT NULL AND date(start_date) >= date(?)
            ORDER BY start_date ASC LIMIT 1""",
         (iso_now,),
     ).fetchone()

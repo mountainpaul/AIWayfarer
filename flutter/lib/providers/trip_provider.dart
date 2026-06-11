@@ -20,6 +20,16 @@ final initialSyncProvider = FutureProvider<bool>((ref) async {
   return ok;
 });
 
+/// Pull fresh data from the backend, then bump the trigger so all local-read
+/// providers refetch. Returns false when the backend is unreachable (cached
+/// data keeps being shown). This is what pull-to-refresh should call —
+/// bumping the trigger alone only re-reads local SQLite.
+Future<bool> refreshFromBackend(WidgetRef ref) async {
+  final ok = await ref.read(syncServiceProvider).snapshot();
+  ref.read(syncTriggerProvider.notifier).state++;
+  return ok;
+}
+
 final tripsProvider = FutureProvider<List<Trip>>((ref) async {
   ref.watch(syncTriggerProvider);
   await ref.watch(initialSyncProvider.future);
@@ -35,6 +45,9 @@ final legsProvider = FutureProvider<List<Leg>>((ref) async {
 final legProvider =
     FutureProvider.family<Leg?, String>((ref, id) async {
   ref.watch(syncTriggerProvider);
+  // Wait for the initial sync like the list providers do — otherwise a
+  // cold-start deep link (web URL refresh) reads an empty DB and 404s.
+  await ref.watch(initialSyncProvider.future);
   return ref.watch(localDbProvider).leg(id);
 });
 

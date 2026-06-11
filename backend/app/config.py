@@ -11,6 +11,7 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "").strip() or None
 ANTHROPIC_MODEL = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6").strip()
 
 DB_PATH = os.getenv("DB_PATH", "").strip() or str(BACKEND_DIR / "db" / "wayfarer.db")
+SCHEMA_PATH = BACKEND_DIR / "db" / "schema.sql"
 MIGRATIONS_DIR = BACKEND_DIR / "db" / "migrations"
 
 _origins_env = os.getenv("CORS_ORIGINS", "*").strip()

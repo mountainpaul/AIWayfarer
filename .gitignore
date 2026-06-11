@@ -12,7 +12,7 @@ flutter/.dart_tool/
 flutter/.packages
 flutter/.flutter-plugins
 flutter/.flutter-plugins-dependencies
-flutter/pubspec.lock
+# pubspec.lock is intentionally committed (this is an app, not a library)
 
 # IDE
 .idea/
@@ -44,4 +44,7 @@ backend/db/wayfarer-hotels-gmaps.csv
 backend/secrets/*
 !backend/secrets/.gitkeep
 /secrets/
+
+# MCP config may embed API keys
+.mcp.json
 

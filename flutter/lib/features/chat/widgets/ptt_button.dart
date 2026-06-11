@@ -15,16 +15,21 @@ class PttButton extends ConsumerStatefulWidget {
 
 class _PttButtonState extends ConsumerState<PttButton> {
   bool _listening = false;
+  bool _pressed = false;
 
   Future<void> _start() async {
+    _pressed = true;
     final svc = ref.read(voiceServiceProvider);
+    // init() can block on the first-run mic permission dialog; the press may
+    // have been released (or the widget disposed) by the time it returns.
     final ok = await svc.init();
-    if (!ok) return;
+    if (!ok || !mounted || !_pressed) return;
     setState(() => _listening = true);
     await svc.startListening(onResult: widget.onTranscript);
   }
 
   Future<void> _stop() async {
+    _pressed = false;
     await ref.read(voiceServiceProvider).stopListening();
     if (mounted) setState(() => _listening = false);
   }

@@ -6,6 +6,7 @@ import 'package:speech_to_text/speech_to_text.dart';
 
 import '../../providers/trip_provider.dart';
 import '../../services/api_client.dart';
+import '../../services/sync_service.dart';
 
 /// Flipped to true when onboarding finishes, causing the app to rebuild.
 final onboardingCompleteNotifier = ValueNotifier<bool>(false);
@@ -82,9 +83,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       _syncError = null;
     });
     try {
-      final data = await ref.read(apiClientProvider).syncSnapshot();
-      final trips = data['trips'] as List?;
-      if (trips != null && trips.isNotEmpty) {
+      // Use SyncService so the data is actually persisted to local SQLite —
+      // fetching the snapshot directly would show "loaded" then discard it.
+      final ok = await ref.read(syncServiceProvider).snapshot();
+      if (!mounted) return;
+      if (ok) {
         setState(() {
           _syncOk = true;
           _syncing = false;
@@ -93,10 +96,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       } else {
         setState(() {
           _syncing = false;
-          _syncError = 'Connected but no trip data found.';
+          _syncError = 'Could not reach the backend.';
         });
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _syncing = false;
         _syncError = 'Could not connect: $e';
