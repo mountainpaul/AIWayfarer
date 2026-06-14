@@ -26,7 +26,7 @@ class LocalDb {
   static final LocalDb instance = LocalDb._();
 
   /// Bump when the local schema changes; see [_onUpgrade].
-  static const _schemaVersion = 3;
+  static const _schemaVersion = 4;
 
   Database? _db;
   Database get db {
@@ -96,6 +96,11 @@ class LocalDb {
         await _renameTableIfPresent(db, e.key, e.value);
       }
     }
+    // v3 -> v4: trip lifecycle status.
+    if (oldVersion < 4) {
+      await _addColumnIfMissing(
+          db, 'trip', 'status', "TEXT NOT NULL DEFAULT 'planning'");
+    }
   }
 
   Future<void> _addColumnIfMissing(
@@ -124,6 +129,7 @@ class LocalDb {
         name        TEXT NOT NULL,
         start_date  TEXT NOT NULL,
         end_date    TEXT NOT NULL,
+        status      TEXT NOT NULL DEFAULT 'planning',
         created_at  TEXT,
         updated_at  TEXT,
         deleted_at  TEXT

@@ -73,6 +73,20 @@ class ApiClient {
     return Trip.fromJson(r.data!);
   }
 
+  Future<Trip> createTrip(Map<String, dynamic> body) async {
+    final r = await _dio.post<Map<String, dynamic>>('/trips', data: body);
+    return Trip.fromJson(r.data!);
+  }
+
+  Future<Trip> patchTrip(String id, Map<String, dynamic> patch) async {
+    final r = await _dio.patch<Map<String, dynamic>>('/trips/$id', data: patch);
+    return Trip.fromJson(r.data!);
+  }
+
+  Future<void> deleteTrip(String id) async {
+    await _dio.delete<void>('/trips/$id');
+  }
+
   // ── Legs ─────────────────────────────────────────────────
   Future<List<Leg>> listLegs({String? tripId}) async {
     final r = await _dio.get<List<dynamic>>('/legs',

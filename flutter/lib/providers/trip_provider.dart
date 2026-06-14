@@ -117,6 +117,37 @@ class TripMutations {
   TripMutations(this.ref);
   final Ref ref;
 
+  // ── Trips ──
+  Future<bool> createTrip(Map<String, dynamic> payload) async {
+    try {
+      await ref.read(apiClientProvider).createTrip(payload);
+      await _refresh();
+      return true;
+    } catch (_) {
+      return false; // create is online-only for now
+    }
+  }
+
+  Future<bool> updateTrip(String id, Map<String, dynamic> patch) async {
+    try {
+      await ref.read(apiClientProvider).patchTrip(id, patch);
+      await _refresh();
+      return true;
+    } catch (e) {
+      return _queueIfOffline(e, 'trip', 'trip', id, 'update', patch);
+    }
+  }
+
+  Future<bool> deleteTrip(String id) async {
+    try {
+      await ref.read(apiClientProvider).deleteTrip(id);
+      await _refresh();
+      return true;
+    } catch (e) {
+      return _queueIfOffline(e, 'trip', 'trip', id, 'delete', null);
+    }
+  }
+
   Future<bool> toggleTaskDone(String id) async {
     try {
       await ref.read(apiClientProvider).toggleTaskDone(id);

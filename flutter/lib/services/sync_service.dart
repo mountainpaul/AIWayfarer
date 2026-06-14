@@ -114,6 +114,12 @@ class SyncService {
       case 'packing.update':
         await api.patchPacking(id, payload);
         break;
+      case 'trip.update':
+        await api.patchTrip(id, payload);
+        break;
+      case 'trip.delete':
+        await api.deleteTrip(id);
+        break;
       default:
         // Unknown op shape — drop it rather than loop forever.
         break;

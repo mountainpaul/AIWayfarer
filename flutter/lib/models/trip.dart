@@ -10,6 +10,7 @@ class Trip with _$Trip {
     required String name,
     @JsonKey(name: 'start_date') required String startDate,
     @JsonKey(name: 'end_date') required String endDate,
+    @Default('planning') String status, // planning | active | completed
     @JsonKey(name: 'created_at') String? createdAt,
     @JsonKey(name: 'updated_at') String? updatedAt,
   }) = _Trip;
