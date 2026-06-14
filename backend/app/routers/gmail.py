@@ -4,12 +4,13 @@ uses Claude to extract structured data, returns candidates for import.
 """
 
 import sqlite3
-import uuid
 from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from ..db import get_db
+from ..repositories.booking_repository import BookingRepository
+from ..repositories.leg_repository import LegRepository
 from ..services import claude as claude_svc
 from ..services import gmail_scanner, google_auth
 
@@ -65,20 +66,15 @@ def scan_bookings(
     ready for review and import.
     """
     try:
-        # Get legs for date-range matching
-        rows = db.execute(
-            "SELECT id, name, start_date, end_date FROM leg ORDER BY start_date"
-        ).fetchall()
-        legs = [dict(r) for r in rows]
-
+        legs = LegRepository(db).list(order_by="start_date ASC")
         candidates = gmail_scanner.scan_and_parse(legs=legs, months=months)
 
         # Flag candidates that already exist so the UI can pre-skip them.
         # Match on confirmation number when present, else on a composite key
         # (leg/type/name/date) so re-scans don't surface known duplicates.
-        existing = db.execute("SELECT * FROM booking").fetchall()
-        existing_confs = {r["confirmation"] for r in existing if r["confirmation"]}
-        existing_keys = {_dedup_key(dict(r)) for r in existing}
+        existing = BookingRepository(db).list()
+        existing_confs = {b["confirmation"] for b in existing if b["confirmation"]}
+        existing_keys = {_dedup_key(b) for b in existing}
 
         for c in candidates:
             conf = c.get("confirmation")
@@ -110,10 +106,7 @@ def scan_offers(
     is written to the database.
     """
     try:
-        rows = db.execute(
-            "SELECT id, name, start_date, end_date FROM leg ORDER BY start_date"
-        ).fetchall()
-        legs = [dict(r) for r in rows]
+        legs = LegRepository(db).list(order_by="start_date ASC")
         today = datetime.now(timezone.utc).date().isoformat()
 
         offers = gmail_scanner.scan_offers(legs=legs, today=today, months=months)
@@ -147,26 +140,26 @@ def import_bookings(
     Skips rows whose leg is unknown or that already exist (by confirmation or
     composite key), and coerces type/status to valid enum values.
     """
+    leg_repo = LegRepository(db)
+    booking_repo = BookingRepository(db)
+
     # Build the dedup indexes once up front.
-    existing = db.execute("SELECT * FROM booking").fetchall()
-    existing_confs = {r["confirmation"] for r in existing if r["confirmation"]}
-    existing_keys = {_dedup_key(dict(r)) for r in existing}
+    existing = booking_repo.list()
+    existing_confs = {b["confirmation"] for b in existing if b["confirmation"]}
+    existing_keys = {_dedup_key(b) for b in existing}
 
     created = []
     skipped = 0
     for b in bookings:
         leg_id = _str_or_none(b.get("leg_id"))
-        if not leg_id:
-            skipped += 1
-            continue
-        if not db.execute("SELECT id FROM leg WHERE id = ?", (leg_id,)).fetchone():
+        if not leg_id or leg_repo.get(leg_id) is None:
             skipped += 1
             continue
 
         # Sanitize every field — never trust the caller-supplied (LLM-origin)
-        # values. A JSON null name would violate NOT NULL and abort the batch;
-        # a string cost_cents would insert fine (SQLite flexible typing) but
-        # then fail Pydantic validation on every subsequent /bookings read.
+        # values. A JSON null name would violate NOT NULL; a string cost_cents
+        # would insert under SQLite's flexible typing but then fail Pydantic
+        # validation on every subsequent /bookings read.
         btype = str(b.get("type") or "other").lower()
         if btype not in gmail_scanner.BOOKING_TYPES:
             btype = "other"
@@ -176,39 +169,32 @@ def import_bookings(
         name = _str_or_none(b.get("name")) or "Unknown"
         conf = _str_or_none(b.get("confirmation"))
 
-        normalized = {**b, "type": btype, "name": name, "leg_id": leg_id}
-        key = _dedup_key(normalized)
+        key = _dedup_key({"leg_id": leg_id, "type": btype, "name": name,
+                          "start_date": b.get("start_date")})
         if (conf and conf in existing_confs) or key in existing_keys:
             skipped += 1
             continue
 
-        new_id = str(uuid.uuid4())
+        data = {
+            "leg_id": leg_id,
+            "type": btype,
+            "name": name,
+            "status": status,
+            "start_date": _iso_date_or_none(b.get("start_date")),
+            "end_date": _iso_date_or_none(b.get("end_date")),
+            "confirmation": conf,
+            "cost_cents": _int_or_none(b.get("cost_cents")),
+            "currency": _str_or_none(b.get("currency")) or "EUR",
+            "location_name": _str_or_none(b.get("location_name")),
+            "notes": _str_or_none(b.get("notes")),
+        }
         try:
-            db.execute(
-                """INSERT INTO booking
-                   (id, leg_id, type, name, status, start_date, end_date,
-                    confirmation, cost_cents, currency, location_name, notes)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    new_id,
-                    leg_id,
-                    btype,
-                    name,
-                    status,
-                    _iso_date_or_none(b.get("start_date")),
-                    _iso_date_or_none(b.get("end_date")),
-                    conf,
-                    _int_or_none(b.get("cost_cents")),
-                    _str_or_none(b.get("currency")) or "EUR",
-                    _str_or_none(b.get("location_name")),
-                    _str_or_none(b.get("notes")),
-                ),
-            )
+            row = booking_repo.create(data)
         except sqlite3.Error:
             # One malformed row must not abort the rest of the batch.
             skipped += 1
             continue
-        created.append(new_id)
+        created.append(row["id"])
         # Keep indexes current so duplicates within the same batch are skipped too.
         if conf:
             existing_confs.add(conf)

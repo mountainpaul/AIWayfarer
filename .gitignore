@@ -49,3 +49,4 @@ backend/secrets/*
 .mcp.json
 
 .worktrees/
+.claude/worktrees/
