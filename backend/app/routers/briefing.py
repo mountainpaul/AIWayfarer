@@ -1,10 +1,10 @@
 import sqlite3
-import uuid
 from datetime import date as date_cls
 from fastapi import APIRouter, Depends, HTTPException, Response
 
 from ..db import get_db
 from ..models import Briefing, BriefingGenerateRequest
+from ..repositories.briefing_repository import BriefingRepository
 from ..services import briefing as briefing_svc
 from ..services import claude as claude_svc
 
@@ -33,24 +33,14 @@ def generate(payload: BriefingGenerateRequest, db: sqlite3.Connection = Depends(
     except Exception:
         markdown = base_md
 
-    new_id = str(uuid.uuid4())
-    db.execute(
-        """INSERT INTO briefing (id, date, markdown) VALUES (?, ?, ?)
-           ON CONFLICT(date) DO UPDATE SET
-               markdown = excluded.markdown,
-               created_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')""",
-        (new_id, day, markdown),
-    )
-    row = db.execute("SELECT * FROM briefing WHERE date = ?", (day,)).fetchone()
-    return Briefing(**dict(row))
+    row = BriefingRepository(db).upsert(day, markdown)
+    return Briefing(**row)
 
 
 @router.get("/today", response_class=Response)
 def today(db: sqlite3.Connection = Depends(get_db)):
     """Return the latest cached briefing as raw markdown."""
-    row = db.execute(
-        "SELECT * FROM briefing ORDER BY date DESC LIMIT 1"
-    ).fetchone()
+    row = BriefingRepository(db).latest()
     if not row:
         raise HTTPException(status_code=404, detail="no briefing has been generated yet")
     return Response(content=row["markdown"], media_type="text/markdown")
