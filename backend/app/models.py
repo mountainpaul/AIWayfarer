@@ -291,6 +291,18 @@ class BriefingGenerateRequest(BaseModel):
     date: Optional[str] = None  # ISO date; defaults to "today" in caller's local sense
 
 
+# ── Accommodation coverage ──────────────────────────────────────
+
+class CoverageItem(BaseModel):
+    leg_id: str
+    leg_name: str
+    start_date: str
+    end_date: str
+    total_nights: int
+    booked_nights: int
+    unbooked_nights: int
+
+
 # ── Schengen 90/180 tracker ─────────────────────────────────────
 
 class SchengenReport(BaseModel):

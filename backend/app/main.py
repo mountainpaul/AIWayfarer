@@ -9,6 +9,7 @@ from .routers import (
     briefing,
     calendar,
     changes,
+    coverage,
     chat,
     gmail,
     grounding,
@@ -57,6 +58,7 @@ def create_app() -> FastAPI:
         sync.router,
         changes.router,
         schengen.router,
+        coverage.router,
         calendar.router,
         gmail.router,
     ):
