@@ -17,6 +17,8 @@ ENTITY_TABLE = {
     "booking": "booking",
     "task": "task",
     "packing": "packing_item",
+    "trip": "trip",
+    "leg": "leg",
 }
 
 

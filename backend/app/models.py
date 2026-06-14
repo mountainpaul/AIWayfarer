@@ -10,6 +10,7 @@ PackingCategory = Literal["clothing", "layers", "footwear", "toiletries", "elect
 JournalEntryType = Literal["note", "voice", "reflection"]
 ChatMode = Literal["planning", "companion"]
 Confidence = Literal["high", "medium", "low"]
+TripStatus = Literal["planning", "active", "completed"]
 
 
 # ── Trip ────────────────────────────────────────────────────────
@@ -20,9 +21,24 @@ class Trip(BaseModel):
     name: str
     start_date: str
     end_date: str
+    status: TripStatus = "planning"
     created_at: str
     updated_at: str
     deleted_at: Optional[str] = None
+
+
+class TripCreate(BaseModel):
+    name: str
+    start_date: str
+    end_date: str
+    status: TripStatus = "planning"
+
+
+class TripUpdate(BaseModel):
+    name: Optional[str] = None
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    status: Optional[TripStatus] = None
 
 
 # ── Leg ─────────────────────────────────────────────────────────
@@ -46,6 +62,22 @@ class Leg(BaseModel):
     created_at: str
     updated_at: str
     deleted_at: Optional[str] = None
+
+
+class LegCreate(BaseModel):
+    trip_id: str
+    slug: str
+    name: str
+    emoji: Optional[str] = None
+    color: Optional[str] = None
+    start_date: str
+    end_date: str
+    is_schengen: bool = False
+    budget_cents: Optional[int] = None
+    currency: str = "USD"
+    places: Optional[str] = None
+    notes: Optional[str] = None
+    sort_order: int = 0
 
 
 class LegUpdate(BaseModel):
