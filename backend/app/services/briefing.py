@@ -12,7 +12,7 @@ from typing import Optional
 
 def _bookings_on(db: sqlite3.Connection, day: str) -> list[dict]:
     rows = db.execute(
-        """SELECT * FROM bookings
+        """SELECT * FROM booking
            WHERE (start_date IS NOT NULL AND date(start_date) = date(?))
               OR (end_date   IS NOT NULL AND date(end_date)   = date(?))
               OR (start_date IS NOT NULL AND end_date IS NOT NULL
@@ -25,7 +25,7 @@ def _bookings_on(db: sqlite3.Connection, day: str) -> list[dict]:
 
 def _leg_for(db: sqlite3.Connection, day: str) -> Optional[dict]:
     row = db.execute(
-        """SELECT * FROM legs WHERE date(?) BETWEEN date(start_date) AND date(end_date)
+        """SELECT * FROM leg WHERE date(?) BETWEEN date(start_date) AND date(end_date)
            ORDER BY start_date ASC LIMIT 1""",
         (day,),
     ).fetchone()
@@ -35,7 +35,7 @@ def _leg_for(db: sqlite3.Connection, day: str) -> Optional[dict]:
 def _open_tasks(db: sqlite3.Connection, leg_id: Optional[str]) -> list[dict]:
     if leg_id:
         rows = db.execute(
-            """SELECT * FROM tasks WHERE is_done = 0 AND (leg_id = ? OR leg_id IS NULL)
+            """SELECT * FROM task WHERE is_done = 0 AND (leg_id = ? OR leg_id IS NULL)
                ORDER BY CASE priority
                    WHEN 'critical' THEN 0 WHEN 'high' THEN 1
                    WHEN 'medium' THEN 2 WHEN 'low' THEN 3 END,
@@ -44,7 +44,7 @@ def _open_tasks(db: sqlite3.Connection, leg_id: Optional[str]) -> list[dict]:
         ).fetchall()
     else:
         rows = db.execute(
-            """SELECT * FROM tasks WHERE is_done = 0
+            """SELECT * FROM task WHERE is_done = 0
                ORDER BY CASE priority
                    WHEN 'critical' THEN 0 WHEN 'high' THEN 1
                    WHEN 'medium' THEN 2 WHEN 'low' THEN 3 END,

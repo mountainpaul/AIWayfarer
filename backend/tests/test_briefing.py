@@ -51,7 +51,7 @@ def test_generate_briefing_handles_invalid_date():
 def test_briefing_today_returns_404_when_none_exists():
     # Wipe any briefings created by other tests in this run.
     c = _conn()
-    c.execute("DELETE FROM briefings")
+    c.execute("DELETE FROM briefing")
     c.commit()
     c.close()
 
@@ -83,7 +83,7 @@ def test_briefing_generate_is_idempotent_on_same_date():
     r2 = client.post("/briefing/generate", json={"date": "2026-04-17"})
     assert r2.status_code == 200
     rows = _conn().execute(
-        "SELECT COUNT(*) AS n FROM briefings WHERE date = ?", ("2026-04-17",)
+        "SELECT COUNT(*) AS n FROM briefing WHERE date = ?", ("2026-04-17",)
     ).fetchone()
     assert rows["n"] == 1
 

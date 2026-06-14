@@ -26,13 +26,14 @@ def test_bootstrap_fresh_db(tmp_path, monkeypatch):
 
     tables = _tables(str(fresh))
     for expected in (
-        "trips",
-        "legs",
-        "bookings",
-        "tasks",
-        "packing_items",
-        "journal_entries",
-        "briefings",
+        "trip",
+        "leg",
+        "booking",
+        "task",
+        "packing_item",
+        "journal_entry",
+        "briefing",
+        "change",
         "schema_migrations",
     ):
         assert expected in tables, f"missing table {expected}"
@@ -45,5 +46,6 @@ def test_bootstrap_fresh_db(tmp_path, monkeypatch):
     finally:
         conn.close()
     # Each migration file recorded exactly once despite running twice.
+    # (The base schema is consolidated into schema.sql; incremental migrations
+    # in db/migrations/ are tracked here once applied.)
     assert applied == sorted(set(applied))
-    assert "0002_briefings.sql" in applied

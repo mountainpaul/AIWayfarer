@@ -27,7 +27,7 @@ def list_tasks(
     is_done: Optional[bool] = None,
     db: sqlite3.Connection = Depends(get_db),
 ):
-    sql = "SELECT * FROM tasks"
+    sql = "SELECT * FROM task"
     where: list[str] = ["deleted_at IS NULL"]
     params: list = []
     if leg_id:
@@ -47,7 +47,7 @@ def list_tasks(
 @router.get("/{task_id}", response_model=Task)
 def get_task(task_id: str, db: sqlite3.Connection = Depends(get_db)):
     row = db.execute(
-        "SELECT * FROM tasks WHERE id = ? AND deleted_at IS NULL", (task_id,)
+        "SELECT * FROM task WHERE id = ? AND deleted_at IS NULL", (task_id,)
     ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="task not found")
@@ -57,17 +57,17 @@ def get_task(task_id: str, db: sqlite3.Connection = Depends(get_db)):
 @router.post("", response_model=Task, status_code=201)
 def create_task(payload: TaskCreate, db: sqlite3.Connection = Depends(get_db)):
     if payload.leg_id:
-        leg = db.execute("SELECT id FROM legs WHERE id = ?", (payload.leg_id,)).fetchone()
+        leg = db.execute("SELECT id FROM leg WHERE id = ?", (payload.leg_id,)).fetchone()
         if not leg:
             raise HTTPException(status_code=400, detail="leg_id does not exist")
     new_id = str(uuid.uuid4())
     db.execute(
-        """INSERT INTO tasks (id, leg_id, title, priority, due_date, is_done, notes)
+        """INSERT INTO task (id, leg_id, title, priority, due_date, is_done, notes)
            VALUES (?, ?, ?, ?, ?, ?, ?)""",
         (new_id, payload.leg_id, payload.title, payload.priority,
          payload.due_date, 1 if payload.is_done else 0, payload.notes),
     )
-    row = db.execute("SELECT * FROM tasks WHERE id = ?", (new_id,)).fetchone()
+    row = db.execute("SELECT * FROM task WHERE id = ?", (new_id,)).fetchone()
     changelog.append(db, entity="task", entity_id=new_id, op="create",
                      new=dict(row))
     return _row_to_task(row)
@@ -76,7 +76,7 @@ def create_task(payload: TaskCreate, db: sqlite3.Connection = Depends(get_db)):
 @router.patch("/{task_id}", response_model=Task)
 def update_task(task_id: str, payload: TaskUpdate, db: sqlite3.Connection = Depends(get_db)):
     existing = db.execute(
-        "SELECT * FROM tasks WHERE id = ? AND deleted_at IS NULL", (task_id,)
+        "SELECT * FROM task WHERE id = ? AND deleted_at IS NULL", (task_id,)
     ).fetchone()
     if not existing:
         raise HTTPException(status_code=404, detail="task not found")
@@ -89,30 +89,30 @@ def update_task(task_id: str, payload: TaskUpdate, db: sqlite3.Connection = Depe
     set_clause = ", ".join(f"{k} = ?" for k in fields)
     params = list(fields.values()) + [task_id]
     db.execute(
-        f"UPDATE tasks SET {set_clause}, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?",
+        f"UPDATE task SET {set_clause}, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?",
         params,
     )
     changelog.append(db, entity="task", entity_id=task_id, op="update",
                      new=fields, old=old)
-    row = db.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    row = db.execute("SELECT * FROM task WHERE id = ?", (task_id,)).fetchone()
     return _row_to_task(row)
 
 
 @router.patch("/{task_id}/done", response_model=Task)
 def toggle_done(task_id: str, db: sqlite3.Connection = Depends(get_db)):
     row = db.execute(
-        "SELECT is_done FROM tasks WHERE id = ? AND deleted_at IS NULL", (task_id,)
+        "SELECT is_done FROM task WHERE id = ? AND deleted_at IS NULL", (task_id,)
     ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="task not found")
     new_val = 0 if row["is_done"] else 1
     db.execute(
-        "UPDATE tasks SET is_done = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?",
+        "UPDATE task SET is_done = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?",
         (new_val, task_id),
     )
     changelog.append(db, entity="task", entity_id=task_id, op="update",
                      new={"is_done": new_val}, old={"is_done": row["is_done"]})
-    updated = db.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    updated = db.execute("SELECT * FROM task WHERE id = ?", (task_id,)).fetchone()
     return _row_to_task(updated)
 
 
@@ -121,7 +121,7 @@ def delete_task(task_id: str, db: sqlite3.Connection = Depends(get_db)):
     # Soft delete: tombstone so it's recoverable and propagates via sync.
     now = _now()
     cur = db.execute(
-        "UPDATE tasks SET deleted_at = ?, updated_at = ? "
+        "UPDATE task SET deleted_at = ?, updated_at = ? "
         "WHERE id = ? AND deleted_at IS NULL",
         (now, now, task_id),
     )

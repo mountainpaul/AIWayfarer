@@ -26,7 +26,7 @@ def list_bookings(
     status: Optional[str] = None,
     db: sqlite3.Connection = Depends(get_db),
 ):
-    sql = "SELECT * FROM bookings"
+    sql = "SELECT * FROM booking"
     where = ["deleted_at IS NULL"]
     params: list = []
     if leg_id:
@@ -46,7 +46,7 @@ def list_bookings(
 @router.get("/{booking_id}", response_model=Booking)
 def get_booking(booking_id: str, db: sqlite3.Connection = Depends(get_db)):
     row = db.execute(
-        "SELECT * FROM bookings WHERE id = ? AND deleted_at IS NULL", (booking_id,)
+        "SELECT * FROM booking WHERE id = ? AND deleted_at IS NULL", (booking_id,)
     ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="booking not found")
@@ -55,13 +55,13 @@ def get_booking(booking_id: str, db: sqlite3.Connection = Depends(get_db)):
 
 @router.post("", response_model=Booking, status_code=201)
 def create_booking(payload: BookingCreate, db: sqlite3.Connection = Depends(get_db)):
-    leg = db.execute("SELECT id FROM legs WHERE id = ?", (payload.leg_id,)).fetchone()
+    leg = db.execute("SELECT id FROM leg WHERE id = ?", (payload.leg_id,)).fetchone()
     if not leg:
         raise HTTPException(status_code=400, detail="leg_id does not exist")
 
     new_id = str(uuid.uuid4())
     db.execute(
-        """INSERT INTO bookings
+        """INSERT INTO booking
            (id, leg_id, type, name, status, start_date, end_date, confirmation,
             cost_cents, currency, location_name, location_lat, location_lon, notes)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
@@ -73,7 +73,7 @@ def create_booking(payload: BookingCreate, db: sqlite3.Connection = Depends(get_
             payload.notes,
         ),
     )
-    row = db.execute("SELECT * FROM bookings WHERE id = ?", (new_id,)).fetchone()
+    row = db.execute("SELECT * FROM booking WHERE id = ?", (new_id,)).fetchone()
     changelog.append(db, entity="booking", entity_id=new_id, op="create",
                      new=dict(row))
     return _row_to_booking(row)
@@ -82,7 +82,7 @@ def create_booking(payload: BookingCreate, db: sqlite3.Connection = Depends(get_
 @router.patch("/{booking_id}", response_model=Booking)
 def update_booking(booking_id: str, payload: BookingUpdate, db: sqlite3.Connection = Depends(get_db)):
     existing = db.execute(
-        "SELECT * FROM bookings WHERE id = ? AND deleted_at IS NULL", (booking_id,)
+        "SELECT * FROM booking WHERE id = ? AND deleted_at IS NULL", (booking_id,)
     ).fetchone()
     if not existing:
         raise HTTPException(status_code=404, detail="booking not found")
@@ -94,12 +94,12 @@ def update_booking(booking_id: str, payload: BookingUpdate, db: sqlite3.Connecti
     set_clause = ", ".join(f"{k} = ?" for k in fields)
     params = list(fields.values()) + [booking_id]
     db.execute(
-        f"UPDATE bookings SET {set_clause}, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?",
+        f"UPDATE booking SET {set_clause}, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?",
         params,
     )
     changelog.append(db, entity="booking", entity_id=booking_id, op="update",
                      new=fields, old=old)
-    row = db.execute("SELECT * FROM bookings WHERE id = ?", (booking_id,)).fetchone()
+    row = db.execute("SELECT * FROM booking WHERE id = ?", (booking_id,)).fetchone()
     return _row_to_booking(row)
 
 
@@ -109,7 +109,7 @@ def delete_booking(booking_id: str, db: sqlite3.Connection = Depends(get_db)):
     # delete propagates to clients via sync. Never physically remove the row.
     now = _now()
     cur = db.execute(
-        "UPDATE bookings SET deleted_at = ?, updated_at = ? "
+        "UPDATE booking SET deleted_at = ?, updated_at = ? "
         "WHERE id = ? AND deleted_at IS NULL",
         (now, now, booking_id),
     )

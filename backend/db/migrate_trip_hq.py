@@ -227,7 +227,7 @@ def migrate(db_path: str, export_gmaps: bool = False):
     # ── Trip ──
     trip_id = str(uuid.uuid4())
     conn.execute(
-        "INSERT INTO trips (id, name, start_date, end_date) VALUES (?, ?, ?, ?)",
+        "INSERT INTO trip (id, name, start_date, end_date) VALUES (?, ?, ?, ?)",
         (trip_id, TRIP["name"], TRIP["start_date"], TRIP["end_date"]),
     )
 
@@ -237,7 +237,7 @@ def migrate(db_path: str, export_gmaps: bool = False):
         leg_id = str(uuid.uuid4())
         slug_to_leg_id[leg["slug"]] = leg_id
         conn.execute(
-            """INSERT INTO legs
+            """INSERT INTO leg
                (id, trip_id, slug, name, emoji, color, start_date, end_date,
                 is_schengen, budget_cents, currency, places, sort_order)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'USD', ?, ?)""",
@@ -262,7 +262,7 @@ def migrate(db_path: str, export_gmaps: bool = False):
         coords = HOTEL_COORDS.get(b["id"]) or TRANSPORT_COORDS.get(b["id"]) or {}
 
         conn.execute(
-            """INSERT INTO bookings
+            """INSERT INTO booking
                (id, leg_id, type, name, status, start_date, end_date,
                 confirmation, cost_cents, currency,
                 location_name, location_lat, location_lon, notes)
@@ -305,7 +305,7 @@ def migrate(db_path: str, export_gmaps: bool = False):
         leg_id = slug_to_leg_id.get(t.get("leg", ""))
 
         conn.execute(
-            """INSERT INTO tasks
+            """INSERT INTO task
                (id, leg_id, title, priority, due_date, is_done, notes)
                VALUES (?, ?, ?, ?, ?, ?, ?)""",
             (
@@ -322,7 +322,7 @@ def migrate(db_path: str, export_gmaps: bool = False):
     # ── Packing ──
     for i, (cat, item_name) in enumerate(DEFAULT_PACKING):
         conn.execute(
-            """INSERT INTO packing_items
+            """INSERT INTO packing_item
                (id, trip_id, category, name, is_packed, sort_order)
                VALUES (?, ?, ?, ?, 0, ?)""",
             (str(uuid.uuid4()), trip_id, cat, item_name, i),
@@ -330,21 +330,21 @@ def migrate(db_path: str, export_gmaps: bool = False):
 
     conn.commit()
 
-    # ── Summary ──
+    # ── Summary ── (singular table names per BEST_PRACTICES.md §3.1)
     counts = {}
-    for table in ("trips", "legs", "bookings", "tasks", "packing_items", "journal_entries"):
+    for table in ("trip", "leg", "booking", "task", "packing_item", "journal_entry"):
         counts[table] = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
 
     print(f"\nMigration complete → {db_path}")
-    print(f"  trips:          {counts['trips']}")
-    print(f"  legs:           {counts['legs']}")
-    print(f"  bookings:       {counts['bookings']}")
-    print(f"  tasks:          {counts['tasks']} ({dropped} ghosts dropped)")
-    print(f"  packing_items:  {counts['packing_items']}")
-    print(f"  journal_entries: {counts['journal_entries']}")
+    print(f"  trip:           {counts['trip']}")
+    print(f"  leg:            {counts['leg']}")
+    print(f"  booking:        {counts['booking']}")
+    print(f"  task:           {counts['task']} ({dropped} ghosts dropped)")
+    print(f"  packing_item:   {counts['packing_item']}")
+    print(f"  journal_entry:  {counts['journal_entry']}")
 
     with_coords = conn.execute(
-        "SELECT COUNT(*) FROM bookings WHERE location_lat IS NOT NULL"
+        "SELECT COUNT(*) FROM booking WHERE location_lat IS NOT NULL"
     ).fetchone()[0]
     print(f"  bookings with coords: {with_coords}")
 
@@ -377,8 +377,8 @@ def export_google_maps_csv(conn: sqlite3.Connection, db_path: str):
         """SELECT b.name, b.start_date, b.end_date, b.location_name,
                   b.location_lat, b.location_lon, b.type, b.notes,
                   l.name as leg_name, l.emoji
-           FROM bookings b
-           JOIN legs l ON b.leg_id = l.id
+           FROM booking b
+           JOIN leg l ON b.leg_id = l.id
            WHERE b.location_lat IS NOT NULL
              AND b.type IN ('hotel', 'rifugio')
            ORDER BY b.start_date""",

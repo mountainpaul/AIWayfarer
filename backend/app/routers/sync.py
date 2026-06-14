@@ -79,7 +79,7 @@ def snapshot(
 
     # current_leg is a convenience pointer for the home screen — never a tombstone.
     leg_row = db.execute(
-        """SELECT * FROM legs
+        """SELECT * FROM leg
            WHERE deleted_at IS NULL
              AND date(?) BETWEEN date(start_date) AND date(end_date)
            ORDER BY start_date ASC LIMIT 1""",
@@ -92,10 +92,10 @@ def snapshot(
         server_time=now,
         is_delta=since is not None,
         current_leg=current_leg,
-        trips=[Trip(**dict(r)) for r in rows("trips")],
-        legs=[_row_to_leg(r) for r in rows("legs")],
-        bookings=[_row_to_booking(r) for r in rows("bookings")],
-        tasks=[_row_to_task(r) for r in rows("tasks")],
-        packing_items=[_row_to_packing(r) for r in rows("packing_items")],
-        journal_entries=[JournalEntry(**dict(r)) for r in rows("journal_entries")],
+        trips=[Trip(**dict(r)) for r in rows("trip")],
+        legs=[_row_to_leg(r) for r in rows("leg")],
+        bookings=[_row_to_booking(r) for r in rows("booking")],
+        tasks=[_row_to_task(r) for r in rows("task")],
+        packing_items=[_row_to_packing(r) for r in rows("packing_item")],
+        journal_entries=[JournalEntry(**dict(r)) for r in rows("journal_entry")],
     )

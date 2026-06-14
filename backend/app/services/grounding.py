@@ -16,7 +16,7 @@ def _row_to_dict(row: sqlite3.Row | None) -> Optional[dict]:
 
 def find_current_leg(db: sqlite3.Connection, date: str) -> Optional[dict]:
     row = db.execute(
-        """SELECT * FROM legs
+        """SELECT * FROM leg
            WHERE date(?) BETWEEN date(start_date) AND date(end_date)
            ORDER BY start_date ASC LIMIT 1""",
         (date,),
@@ -26,7 +26,7 @@ def find_current_leg(db: sqlite3.Connection, date: str) -> Optional[dict]:
 
 def todays_bookings(db: sqlite3.Connection, date: str) -> list[dict]:
     rows = db.execute(
-        """SELECT * FROM bookings
+        """SELECT * FROM booking
            WHERE (start_date IS NOT NULL AND date(start_date) = date(?))
               OR (end_date   IS NOT NULL AND date(end_date)   = date(?))
               OR (start_date IS NOT NULL AND end_date IS NOT NULL
@@ -41,7 +41,7 @@ def next_booking_after(db: sqlite3.Connection, iso_now: str) -> Optional[dict]:
     # Compare on date(): start_date is date-only (YYYY-MM-DD) while iso_now is
     # a full timestamp, and string ordering would skip everything dated today.
     row = db.execute(
-        """SELECT * FROM bookings
+        """SELECT * FROM booking
            WHERE start_date IS NOT NULL AND date(start_date) >= date(?)
            ORDER BY start_date ASC LIMIT 1""",
         (iso_now,),
@@ -50,7 +50,7 @@ def next_booking_after(db: sqlite3.Connection, iso_now: str) -> Optional[dict]:
 
 
 def open_tasks_count(db: sqlite3.Connection) -> int:
-    row = db.execute("SELECT COUNT(*) AS n FROM tasks WHERE is_done = 0").fetchone()
+    row = db.execute("SELECT COUNT(*) AS n FROM task WHERE is_done = 0").fetchone()
     return int(row["n"]) if row else 0
 
 
@@ -93,7 +93,7 @@ def enrich_grounding_text(
     # Enrich with DB data
     leg = find_current_leg(db, iso_date) if not g.current_leg_id else None
     if g.current_leg_id:
-        row = db.execute("SELECT * FROM legs WHERE id = ?", (g.current_leg_id,)).fetchone()
+        row = db.execute("SELECT * FROM leg WHERE id = ?", (g.current_leg_id,)).fetchone()
         if row:
             leg = dict(row)
 

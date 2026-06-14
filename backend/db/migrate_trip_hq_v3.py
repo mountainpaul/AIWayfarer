@@ -137,7 +137,7 @@ def migrate(db_path: str):
     # ── Trip ──
     trip_id = str(uuid.uuid4())
     conn.execute(
-        "INSERT INTO trips (id, name, start_date, end_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO trip (id, name, start_date, end_date, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
         (trip_id, trip_info["name"], trip_info["start_date"], trip_info["end_date"], now, now),
     )
 
@@ -147,7 +147,7 @@ def migrate(db_path: str):
         leg_id = str(uuid.uuid4())
         slug_to_leg_id[leg["slug"]] = leg_id
         conn.execute(
-            """INSERT INTO legs
+            """INSERT INTO leg
                (id, trip_id, slug, name, emoji, color, start_date, end_date,
                 is_schengen, budget_cents, currency, places, sort_order, created_at, updated_at)
                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'USD', ?, ?, ?, ?)""",
@@ -190,7 +190,7 @@ def migrate(db_path: str):
         notes = " · ".join(notes_parts) if notes_parts else None
 
         conn.execute(
-            """INSERT INTO bookings
+            """INSERT INTO booking
                (id, leg_id, type, name, status, start_date, end_date,
                 confirmation, cost_cents, currency,
                 location_name, notes, created_at, updated_at)
@@ -229,7 +229,7 @@ def migrate(db_path: str):
             priority = "medium"
 
         conn.execute(
-            """INSERT INTO tasks
+            """INSERT INTO task
                (id, leg_id, title, priority, is_done, created_at, updated_at)
                VALUES (?, ?, ?, ?, ?, ?, ?)""",
             (
@@ -246,12 +246,12 @@ def migrate(db_path: str):
     # ── Preserve existing packing items ──
     # Don't re-insert packing — they were set up in v1 and may have been modified.
     # Only insert if table is empty.
-    packing_count = conn.execute("SELECT COUNT(*) FROM packing_items").fetchone()[0]
+    packing_count = conn.execute("SELECT COUNT(*) FROM packing_item").fetchone()[0]
     if packing_count == 0:
         from migrate_trip_hq import DEFAULT_PACKING
         for i, (cat, item_name) in enumerate(DEFAULT_PACKING):
             conn.execute(
-                """INSERT INTO packing_items
+                """INSERT INTO packing_item
                    (id, trip_id, category, name, is_packed, sort_order, created_at, updated_at)
                    VALUES (?, ?, ?, ?, 0, ?, ?, ?)""",
                 (str(uuid.uuid4()), trip_id, cat, item_name, i, now, now),
@@ -260,18 +260,18 @@ def migrate(db_path: str):
 
     conn.commit()
 
-    # ── Summary ──
+    # ── Summary ── (singular table names per BEST_PRACTICES.md §3.1)
     counts = {}
-    for table in ("trips", "legs", "bookings", "tasks", "packing_items", "journal_entries"):
+    for table in ("trip", "leg", "booking", "task", "packing_item", "journal_entry"):
         counts[table] = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
 
     print(f"\nMigration complete → {db_path}")
-    print(f"  trips:           {counts['trips']}")
-    print(f"  legs:            {counts['legs']}")
-    print(f"  bookings:        {counts['bookings']} ({skipped} skipped)")
-    print(f"  tasks:           {counts['tasks']}")
-    print(f"  packing_items:   {counts['packing_items']}")
-    print(f"  journal_entries: {counts['journal_entries']}")
+    print(f"  trip:           {counts['trip']}")
+    print(f"  leg:            {counts['leg']}")
+    print(f"  booking:        {counts['booking']} ({skipped} skipped)")
+    print(f"  task:           {counts['task']}")
+    print(f"  packing_item:   {counts['packing_item']}")
+    print(f"  journal_entry:  {counts['journal_entry']}")
 
     conn.close()
 

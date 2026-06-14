@@ -14,9 +14,9 @@ from typing import Optional
 
 # entity name -> projection table. The single place that knows the mapping.
 ENTITY_TABLE = {
-    "booking": "bookings",
-    "task": "tasks",
-    "packing": "packing_items",
+    "booking": "booking",
+    "task": "task",
+    "packing": "packing_item",
 }
 
 
@@ -41,7 +41,7 @@ def append(
     client retrying a queued op never duplicates it. Returns the change_id."""
     cid = change_id or str(uuid.uuid4())
     db.execute(
-        """INSERT OR IGNORE INTO changes
+        """INSERT OR IGNORE INTO change
                (change_id, entity, entity_id, op, patch, undoes, device, client_ts, created_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (

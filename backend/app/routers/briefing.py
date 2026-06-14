@@ -35,13 +35,13 @@ def generate(payload: BriefingGenerateRequest, db: sqlite3.Connection = Depends(
 
     new_id = str(uuid.uuid4())
     db.execute(
-        """INSERT INTO briefings (id, date, markdown) VALUES (?, ?, ?)
+        """INSERT INTO briefing (id, date, markdown) VALUES (?, ?, ?)
            ON CONFLICT(date) DO UPDATE SET
                markdown = excluded.markdown,
                created_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')""",
         (new_id, day, markdown),
     )
-    row = db.execute("SELECT * FROM briefings WHERE date = ?", (day,)).fetchone()
+    row = db.execute("SELECT * FROM briefing WHERE date = ?", (day,)).fetchone()
     return Briefing(**dict(row))
 
 
@@ -49,7 +49,7 @@ def generate(payload: BriefingGenerateRequest, db: sqlite3.Connection = Depends(
 def today(db: sqlite3.Connection = Depends(get_db)):
     """Return the latest cached briefing as raw markdown."""
     row = db.execute(
-        "SELECT * FROM briefings ORDER BY date DESC LIMIT 1"
+        "SELECT * FROM briefing ORDER BY date DESC LIMIT 1"
     ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="no briefing has been generated yet")

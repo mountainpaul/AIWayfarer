@@ -67,7 +67,7 @@ def scan_bookings(
     try:
         # Get legs for date-range matching
         rows = db.execute(
-            "SELECT id, name, start_date, end_date FROM legs ORDER BY start_date"
+            "SELECT id, name, start_date, end_date FROM leg ORDER BY start_date"
         ).fetchall()
         legs = [dict(r) for r in rows]
 
@@ -76,7 +76,7 @@ def scan_bookings(
         # Flag candidates that already exist so the UI can pre-skip them.
         # Match on confirmation number when present, else on a composite key
         # (leg/type/name/date) so re-scans don't surface known duplicates.
-        existing = db.execute("SELECT * FROM bookings").fetchall()
+        existing = db.execute("SELECT * FROM booking").fetchall()
         existing_confs = {r["confirmation"] for r in existing if r["confirmation"]}
         existing_keys = {_dedup_key(dict(r)) for r in existing}
 
@@ -110,7 +110,7 @@ def import_bookings(
     composite key), and coerces type/status to valid enum values.
     """
     # Build the dedup indexes once up front.
-    existing = db.execute("SELECT * FROM bookings").fetchall()
+    existing = db.execute("SELECT * FROM booking").fetchall()
     existing_confs = {r["confirmation"] for r in existing if r["confirmation"]}
     existing_keys = {_dedup_key(dict(r)) for r in existing}
 
@@ -121,7 +121,7 @@ def import_bookings(
         if not leg_id:
             skipped += 1
             continue
-        if not db.execute("SELECT id FROM legs WHERE id = ?", (leg_id,)).fetchone():
+        if not db.execute("SELECT id FROM leg WHERE id = ?", (leg_id,)).fetchone():
             skipped += 1
             continue
 
@@ -147,7 +147,7 @@ def import_bookings(
         new_id = str(uuid.uuid4())
         try:
             db.execute(
-                """INSERT INTO bookings
+                """INSERT INTO booking
                    (id, leg_id, type, name, status, start_date, end_date,
                     confirmation, cost_cents, currency, location_name, notes)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",

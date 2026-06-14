@@ -39,7 +39,7 @@ def list_changes(
         where.append("entity_id = ?"); params.append(entity_id)
     params.append(limit)
     rows = db.execute(
-        f"SELECT * FROM changes WHERE {' AND '.join(where)} ORDER BY seq ASC LIMIT ?",
+        f"SELECT * FROM change WHERE {' AND '.join(where)} ORDER BY seq ASC LIMIT ?",
         params,
     ).fetchall()
     return [_to_change(r) for r in rows]
@@ -48,7 +48,7 @@ def list_changes(
 @router.post("/{change_id}/undo")
 def undo_change(change_id: str, db: sqlite3.Connection = Depends(get_db)):
     target = db.execute(
-        "SELECT * FROM changes WHERE change_id = ?", (change_id,)
+        "SELECT * FROM change WHERE change_id = ?", (change_id,)
     ).fetchone()
     if not target:
         raise HTTPException(status_code=404, detail="change not found")

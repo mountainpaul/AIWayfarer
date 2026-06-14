@@ -21,9 +21,9 @@ def list_legs(
     db: sqlite3.Connection = Depends(get_db),
 ):
     if trip_id:
-        rows = db.execute("SELECT * FROM legs WHERE trip_id = ? ORDER BY sort_order ASC", (trip_id,)).fetchall()
+        rows = db.execute("SELECT * FROM leg WHERE trip_id = ? ORDER BY sort_order ASC", (trip_id,)).fetchall()
     else:
-        rows = db.execute("SELECT * FROM legs ORDER BY sort_order ASC").fetchall()
+        rows = db.execute("SELECT * FROM leg ORDER BY sort_order ASC").fetchall()
     return [_row_to_leg(r) for r in rows]
 
 
@@ -34,7 +34,7 @@ def current_leg(
 ):
     day = date or date_cls.today().isoformat()
     row = db.execute(
-        """SELECT * FROM legs WHERE date(?) BETWEEN date(start_date) AND date(end_date)
+        """SELECT * FROM leg WHERE date(?) BETWEEN date(start_date) AND date(end_date)
            ORDER BY start_date ASC LIMIT 1""",
         (day,),
     ).fetchone()
@@ -43,7 +43,7 @@ def current_leg(
 
 @router.get("/{leg_id}", response_model=Leg)
 def get_leg(leg_id: str, db: sqlite3.Connection = Depends(get_db)):
-    row = db.execute("SELECT * FROM legs WHERE id = ?", (leg_id,)).fetchone()
+    row = db.execute("SELECT * FROM leg WHERE id = ?", (leg_id,)).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="leg not found")
     return _row_to_leg(row)
@@ -51,7 +51,7 @@ def get_leg(leg_id: str, db: sqlite3.Connection = Depends(get_db)):
 
 @router.patch("/{leg_id}", response_model=Leg)
 def update_leg(leg_id: str, payload: LegUpdate, db: sqlite3.Connection = Depends(get_db)):
-    existing = db.execute("SELECT * FROM legs WHERE id = ?", (leg_id,)).fetchone()
+    existing = db.execute("SELECT * FROM leg WHERE id = ?", (leg_id,)).fetchone()
     if not existing:
         raise HTTPException(status_code=404, detail="leg not found")
 
@@ -65,8 +65,8 @@ def update_leg(leg_id: str, payload: LegUpdate, db: sqlite3.Connection = Depends
     set_clause = ", ".join(f"{k} = ?" for k in fields)
     params = list(fields.values()) + [leg_id]
     db.execute(
-        f"UPDATE legs SET {set_clause}, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?",
+        f"UPDATE leg SET {set_clause}, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?",
         params,
     )
-    row = db.execute("SELECT * FROM legs WHERE id = ?", (leg_id,)).fetchone()
+    row = db.execute("SELECT * FROM leg WHERE id = ?", (leg_id,)).fetchone()
     return _row_to_leg(row)
