@@ -31,7 +31,7 @@ def get_client() -> anthropic.Anthropic:
     if _client is None:
         _client = anthropic.Anthropic(
             api_key=config.ANTHROPIC_API_KEY,
-            timeout=180.0,
+            timeout=300.0,
         )
     return _client
 

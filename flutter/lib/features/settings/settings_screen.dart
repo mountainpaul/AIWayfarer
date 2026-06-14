@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers/quiet_mode_provider.dart';
 import '../../services/api_client.dart';
+import '../../services/award_search.dart';
 
 /// Settings: API base URL, voice mode, push-to-talk vs wake-word.
 /// API URL persists via shared_preferences (wired in main.dart + ApiBaseUrlNotifier).
@@ -15,6 +16,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   late final TextEditingController _urlController;
+  late final TextEditingController _airportController;
   bool _wakeWord = false;
 
   @override
@@ -22,19 +24,26 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     super.initState();
     _urlController =
         TextEditingController(text: ref.read(apiBaseUrlProvider));
+    _airportController =
+        TextEditingController(text: ref.read(homeAirportProvider));
   }
 
   @override
   void dispose() {
     _urlController.dispose();
+    _airportController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Keep the field in sync if the URL changes from outside this screen.
+    // Keep the fields in sync if values change from outside this screen
+    // (home airport loads async from SharedPreferences).
     ref.listen<String>(apiBaseUrlProvider, (_, next) {
       if (_urlController.text != next) _urlController.text = next;
+    });
+    ref.listen<String>(homeAirportProvider, (_, next) {
+      if (_airportController.text != next) _airportController.text = next;
     });
 
     return ListView(
@@ -68,6 +77,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           child: Text(
             'Model is configured server-side via the ANTHROPIC_MODEL env var.',
             style: TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+        ),
+        const Divider(height: 32),
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: Text('Travel',
+              style: TextStyle(fontWeight: FontWeight.bold)),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: TextField(
+            controller: _airportController,
+            decoration: const InputDecoration(
+              labelText: 'Home airport (IATA)',
+              border: OutlineInputBorder(),
+              hintText: 'DEN',
+              helperText: 'Default origin for award-availability searches.',
+            ),
+            textCapitalization: TextCapitalization.characters,
+            maxLength: 3,
+            onSubmitted: (v) async {
+              await ref.read(homeAirportProvider.notifier).set(v);
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Home airport saved')),
+                );
+              }
+            },
           ),
         ),
         const Divider(height: 32),

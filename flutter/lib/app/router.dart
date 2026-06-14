@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/awards/awards_screen.dart';
 import '../features/chat/chat_screen.dart';
 import '../features/companion/companion_dashboard.dart';
 import '../features/home/home_screen.dart';
@@ -40,6 +41,10 @@ final routerProvider = Provider<GoRouter>((ref) {
                 path: 'scan-email',
                 builder: (_, __) => const EmailScanScreen(),
               ),
+              GoRoute(
+                path: 'awards',
+                builder: (_, __) => const AwardsScreen(),
+              ),
             ],
           ),
           GoRoute(
@@ -66,7 +71,10 @@ class _ShellScaffold extends ConsumerWidget {
     final mode = ref.watch(modeProvider);
     final location = GoRouterState.of(context).uri.path;
     final index = _indexForLocation(location);
-    final wide = MediaQuery.sizeOf(context).width >= 600;
+    // Tablet/desktop get the side rail; phones get a bottom bar in BOTH
+    // orientations. Key off shortestSide (not width) so a phone in landscape —
+    // which is "wide" but short — doesn't get the vertical rail and overflow it.
+    final wide = MediaQuery.sizeOf(context).shortestSide >= 600;
 
     final appBar = AppBar(
       title: const Text('AI Wayfarer'),

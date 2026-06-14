@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/booking.dart';
+import '../../awards/award_search_sheet.dart';
 
 const _bookingTypes = [
   'flight',
@@ -150,6 +151,25 @@ class _BookingFormDialogState extends State<_BookingFormDialog> {
                       .toList(),
                   onChanged: (v) => setState(() => _status = v!),
                 ),
+                // Consider points before booking: for an unbooked flight,
+                // offer a jump into a pre-filled award search.
+                if (_type == 'flight' &&
+                    (_status == 'needs_booking' || _status == 'researching'))
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: OutlinedButton.icon(
+                        onPressed: () => showAwardSearchSheet(
+                          context,
+                          legId: widget.legId,
+                          date: _startDate,
+                        ),
+                        icon: const Icon(Icons.loyalty_outlined, size: 16),
+                        label: const Text('Check award availability'),
+                      ),
+                    ),
+                  ),
                 const SizedBox(height: 12),
                 Row(
                   children: [

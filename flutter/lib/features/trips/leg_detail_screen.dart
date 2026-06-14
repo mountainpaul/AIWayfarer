@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/theme.dart';
 import '../../providers/trip_provider.dart';
+import '../awards/award_search_sheet.dart';
 import 'widgets/booking_form.dart';
 import 'widgets/booking_tile.dart';
 import 'widgets/journal_tile.dart';
@@ -31,15 +32,27 @@ class LegDetailScreen extends ConsumerWidget {
               Container(
                 color: WayfarerTheme.parseLegColor(leg.color).withValues(alpha: 0.15),
                 padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
                   children: [
-                    Text(
-                      '${leg.emoji ?? ''} ${leg.name}',
-                      style: Theme.of(context).textTheme.headlineSmall,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${leg.emoji ?? ''} ${leg.name}',
+                            style: Theme.of(context).textTheme.headlineSmall,
+                          ),
+                          Text('${leg.startDate} - ${leg.endDate}'),
+                          if (leg.places != null) Text(leg.places!),
+                        ],
+                      ),
                     ),
-                    Text('${leg.startDate} - ${leg.endDate}'),
-                    if (leg.places != null) Text(leg.places!),
+                    IconButton(
+                      icon: const Icon(Icons.loyalty_outlined),
+                      tooltip: 'Search award availability',
+                      onPressed: () =>
+                          showAwardSearchSheet(context, legId: legId),
+                    ),
                   ],
                 ),
               ),

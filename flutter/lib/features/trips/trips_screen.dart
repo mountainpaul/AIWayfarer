@@ -52,6 +52,11 @@ class TripsScreen extends ConsumerWidget {
                         tooltip: 'Scan email for bookings',
                         onPressed: () => context.go('/trips/scan-email'),
                       ),
+                      IconButton(
+                        icon: const Icon(Icons.loyalty_outlined),
+                        tooltip: 'Award travel & offers',
+                        onPressed: () => context.go('/trips/awards'),
+                      ),
                     ],
                   ),
                 ),

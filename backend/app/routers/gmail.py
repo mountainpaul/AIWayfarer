@@ -5,7 +5,7 @@ uses Claude to extract structured data, returns candidates for import.
 
 import sqlite3
 import uuid
-from datetime import date
+from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -87,6 +87,44 @@ def scan_bookings(
             )
 
         return {"candidates": candidates, "candidate_count": len(candidates)}
+
+    except google_auth.GoogleNotConfiguredError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except gmail_scanner.GmailApiError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    except claude_svc.ClaudeUnavailableError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Anthropic API error: {e}")
+
+
+@router.post("/scan-offers")
+def scan_offers(
+    months: int = Query(2, ge=1, le=6, description="How many months back to scan"),
+    db: sqlite3.Connection = Depends(get_db),
+):
+    """
+    Scan Gmail for airline/hotel loyalty offers (promos, transfer bonuses,
+    award sales) and parse them with Claude. Offers matched to a trip leg
+    carry its leg_id; generic offers have leg_id null. Stateless — nothing
+    is written to the database.
+    """
+    try:
+        rows = db.execute(
+            "SELECT id, name, start_date, end_date FROM legs ORDER BY start_date"
+        ).fetchall()
+        legs = [dict(r) for r in rows]
+        today = datetime.now(timezone.utc).date().isoformat()
+
+        offers = gmail_scanner.scan_offers(legs=legs, today=today, months=months)
+
+        # Drop offers Claude matched to a leg id that doesn't exist.
+        leg_ids = {lg["id"] for lg in legs}
+        for o in offers:
+            if o.get("leg_id") not in leg_ids:
+                o["leg_id"] = None
+
+        return {"offers": offers, "offer_count": len(offers)}
 
     except google_auth.GoogleNotConfiguredError as e:
         raise HTTPException(status_code=503, detail=str(e))
