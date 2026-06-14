@@ -42,13 +42,21 @@ class ApiClient {
   ApiClient({required String baseUrl})
       : _dio = Dio(
           BaseOptions(
-            baseUrl: baseUrl,
+            baseUrl: _withApiV1(baseUrl),
             connectTimeout: const Duration(seconds: 10),
             receiveTimeout: const Duration(seconds: 60),
             sendTimeout: const Duration(seconds: 30),
             headers: {'Content-Type': 'application/json'},
           ),
         );
+
+  /// All routes are versioned under /api/v1 (BEST_PRACTICES §4). The stored
+  /// base URL is just the host (e.g. http://localhost:8000), so the version
+  /// prefix is applied here — users keep their existing host setting.
+  static String _withApiV1(String base) {
+    final trimmed = base.replaceAll(RegExp(r'/+$'), '');
+    return trimmed.endsWith('/api/v1') ? trimmed : '$trimmed/api/v1';
+  }
 
   final Dio _dio;
 

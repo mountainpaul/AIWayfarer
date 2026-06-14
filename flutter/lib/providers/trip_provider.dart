@@ -153,7 +153,7 @@ class TripMutations {
       await _refresh();
       return true;
     } catch (e) {
-      return _queueIfOffline(e, 'bookings', 'booking', id, 'update', patch);
+      return _queueIfOffline(e, 'booking', 'booking', id, 'update', patch);
     }
   }
 
@@ -163,7 +163,7 @@ class TripMutations {
       await _refresh();
       return true;
     } catch (e) {
-      return _queueIfOffline(e, 'bookings', 'booking', id, 'delete', null);
+      return _queueIfOffline(e, 'booking', 'booking', id, 'delete', null);
     }
   }
 
@@ -183,7 +183,7 @@ class TripMutations {
       await _refresh();
       return true;
     } catch (e) {
-      return _queueIfOffline(e, 'tasks', 'task', id, 'update', patch);
+      return _queueIfOffline(e, 'task', 'task', id, 'update', patch);
     }
   }
 
@@ -193,7 +193,7 @@ class TripMutations {
       await _refresh();
       return true;
     } catch (e) {
-      return _queueIfOffline(e, 'tasks', 'task', id, 'delete', null);
+      return _queueIfOffline(e, 'task', 'task', id, 'delete', null);
     }
   }
 

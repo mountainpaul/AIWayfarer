@@ -21,14 +21,16 @@ class SyncService {
   final ApiClient api;
   final LocalDb db;
 
-  static const _tables = [
-    'trips',
-    'legs',
-    'bookings',
-    'tasks',
-    'packing_items',
-    'journal_entries',
-  ];
+  // The snapshot JSON keys are plural (the API contract); the local tables are
+  // singular (BEST_PRACTICES §3.1). Map each plural payload key to its table.
+  static const _tableForKey = {
+    'trips': 'trip',
+    'legs': 'leg',
+    'bookings': 'booking',
+    'tasks': 'task',
+    'packing_items': 'packing_item',
+    'journal_entries': 'journal_entry',
+  };
 
   /// Delta cursor: the server_time from the last successful pull.
   static const _cursorKey = 'sync_cursor';
@@ -46,9 +48,9 @@ class SyncService {
       final data = await api.syncSnapshot(since: since);
 
       final incoming = <String, List<Map<String, dynamic>>>{
-        for (final t in _tables)
-          if (data[t] is List)
-            t: (data[t] as List)
+        for (final e in _tableForKey.entries)
+          if (data[e.key] is List)
+            e.value: (data[e.key] as List)
                 .whereType<Map<String, dynamic>>()
                 .map((r) => Map<String, dynamic>.from(r))
                 .toList(),

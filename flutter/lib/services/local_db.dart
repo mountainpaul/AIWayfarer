@@ -13,7 +13,8 @@ import '../models/packing_item.dart';
 import '../models/task.dart';
 import '../models/trip.dart';
 
-/// Local SQLite cache. Schema mirrors backend/db/schema.sql + migrations.
+/// Local SQLite cache. Schema mirrors backend/db/schema.sql (singular table
+/// names per BEST_PRACTICES.md §3.1).
 ///
 /// Sync model (see docs/sync-redesign.md): the backend is NOT treated as
 /// authoritative. Incoming rows are MERGED by `updated_at` (last-write-wins),
@@ -25,7 +26,7 @@ class LocalDb {
   static final LocalDb instance = LocalDb._();
 
   /// Bump when the local schema changes; see [_onUpgrade].
-  static const _schemaVersion = 2;
+  static const _schemaVersion = 3;
 
   Database? _db;
   Database get db {
@@ -56,10 +57,9 @@ class LocalDb {
     );
   }
 
-  /// v1 -> v2: add soft-delete tombstones + the timestamps and outbox the
-  /// merge sync needs. Additive only — no existing row is rewritten beyond
-  /// backfilling a missing updated_at from created_at.
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    // v1 -> v2: soft-delete tombstones + the timestamps and outbox the merge
+    // sync needs. Tables are still PLURAL at this point. Additive only.
     if (oldVersion < 2) {
       for (final t in [
         'trips',
@@ -80,6 +80,22 @@ class LocalDb {
           'UPDATE briefings SET updated_at = created_at WHERE updated_at IS NULL');
       await _createOutbox(db);
     }
+    // v2 -> v3: rename tables to singular (BEST_PRACTICES.md §3.1). RENAME
+    // preserves all data and moves indexes with the table.
+    if (oldVersion < 3) {
+      const renames = {
+        'trips': 'trip',
+        'legs': 'leg',
+        'bookings': 'booking',
+        'tasks': 'task',
+        'packing_items': 'packing_item',
+        'journal_entries': 'journal_entry',
+        'briefings': 'briefing',
+      };
+      for (final e in renames.entries) {
+        await _renameTableIfPresent(db, e.key, e.value);
+      }
+    }
   }
 
   Future<void> _addColumnIfMissing(
@@ -91,9 +107,19 @@ class LocalDb {
     }
   }
 
+  Future<void> _renameTableIfPresent(
+      Database db, String from, String to) async {
+    final present = await db.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name = ?",
+        [from]);
+    if (present.isNotEmpty) {
+      await db.execute('ALTER TABLE $from RENAME TO $to');
+    }
+  }
+
   Future<void> _createSchema(Database db, int version) async {
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS trips (
+      CREATE TABLE IF NOT EXISTS trip (
         id          TEXT PRIMARY KEY,
         name        TEXT NOT NULL,
         start_date  TEXT NOT NULL,
@@ -105,7 +131,7 @@ class LocalDb {
     ''');
 
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS legs (
+      CREATE TABLE IF NOT EXISTS leg (
         id            TEXT PRIMARY KEY,
         trip_id       TEXT NOT NULL,
         slug          TEXT NOT NULL UNIQUE,
@@ -125,12 +151,12 @@ class LocalDb {
         deleted_at    TEXT
       )
     ''');
-    await db.execute('CREATE INDEX IF NOT EXISTS idx_legs_trip ON legs(trip_id)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_leg_trip ON leg(trip_id)');
     await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_legs_dates ON legs(start_date, end_date)');
+        'CREATE INDEX IF NOT EXISTS idx_leg_dates ON leg(start_date, end_date)');
 
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS bookings (
+      CREATE TABLE IF NOT EXISTS booking (
         id              TEXT PRIMARY KEY,
         leg_id          TEXT NOT NULL,
         type            TEXT NOT NULL,
@@ -151,16 +177,16 @@ class LocalDb {
       )
     ''');
     await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_bookings_leg ON bookings(leg_id)');
+        'CREATE INDEX IF NOT EXISTS idx_booking_leg ON booking(leg_id)');
     await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_bookings_dates ON bookings(start_date, end_date)');
+        'CREATE INDEX IF NOT EXISTS idx_booking_dates ON booking(start_date, end_date)');
     await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_bookings_type ON bookings(type)');
+        'CREATE INDEX IF NOT EXISTS idx_booking_type ON booking(type)');
     await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status)');
+        'CREATE INDEX IF NOT EXISTS idx_booking_status ON booking(status)');
 
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS tasks (
+      CREATE TABLE IF NOT EXISTS task (
         id          TEXT PRIMARY KEY,
         leg_id      TEXT,
         title       TEXT NOT NULL,
@@ -173,14 +199,14 @@ class LocalDb {
         deleted_at  TEXT
       )
     ''');
-    await db.execute('CREATE INDEX IF NOT EXISTS idx_tasks_leg ON tasks(leg_id)');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_task_leg ON task(leg_id)');
     await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority)');
+        'CREATE INDEX IF NOT EXISTS idx_task_priority ON task(priority)');
     await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_tasks_done ON tasks(is_done)');
+        'CREATE INDEX IF NOT EXISTS idx_task_done ON task(is_done)');
 
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS packing_items (
+      CREATE TABLE IF NOT EXISTS packing_item (
         id          TEXT PRIMARY KEY,
         trip_id     TEXT NOT NULL,
         category    TEXT NOT NULL,
@@ -193,10 +219,10 @@ class LocalDb {
       )
     ''');
     await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_packing_trip ON packing_items(trip_id)');
+        'CREATE INDEX IF NOT EXISTS idx_packing_item_trip ON packing_item(trip_id)');
 
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS journal_entries (
+      CREATE TABLE IF NOT EXISTS journal_entry (
         id              TEXT PRIMARY KEY,
         leg_id          TEXT,
         content         TEXT NOT NULL,
@@ -210,15 +236,15 @@ class LocalDb {
       )
     ''');
     await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_journal_leg ON journal_entries(leg_id)');
+        'CREATE INDEX IF NOT EXISTS idx_journal_entry_leg ON journal_entry(leg_id)');
     await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_journal_type ON journal_entries(entry_type)');
+        'CREATE INDEX IF NOT EXISTS idx_journal_entry_type ON journal_entry(entry_type)');
     await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_journal_created ON journal_entries(created_at)');
+        'CREATE INDEX IF NOT EXISTS idx_journal_entry_created ON journal_entry(created_at)');
 
-    // Briefings - local cache only; backend canonical.
+    // Briefing - local cache only; backend canonical.
     await db.execute('''
-      CREATE TABLE IF NOT EXISTS briefings (
+      CREATE TABLE IF NOT EXISTS briefing (
         id          TEXT PRIMARY KEY,
         date        TEXT NOT NULL UNIQUE,
         markdown    TEXT NOT NULL,
@@ -373,8 +399,7 @@ class LocalDb {
   }
 
   Future<int> pendingOpCount() async {
-    final r =
-        await db.rawQuery('SELECT COUNT(*) AS c FROM pending_ops');
+    final r = await db.rawQuery('SELECT COUNT(*) AS c FROM pending_ops');
     return (r.first['c'] as int?) ?? 0;
   }
 
@@ -385,14 +410,14 @@ class LocalDb {
       extra == null ? 'deleted_at IS NULL' : 'deleted_at IS NULL AND $extra';
 
   Future<List<Trip>> trips() async {
-    final rows = await db.query('trips',
+    final rows = await db.query('trip',
         where: 'deleted_at IS NULL', orderBy: 'start_date');
     return rows.map((r) => Trip.fromJson(_clean(r))).toList();
   }
 
   Future<List<Leg>> legs({String? tripId}) async {
     final rows = await db.query(
-      'legs',
+      'leg',
       where: tripId == null ? _activeWhere() : _activeWhere('trip_id = ?'),
       whereArgs: tripId == null ? null : [tripId],
       orderBy: 'sort_order',
@@ -401,7 +426,7 @@ class LocalDb {
   }
 
   Future<Leg?> leg(String id) async {
-    final rows = await db.query('legs',
+    final rows = await db.query('leg',
         where: _activeWhere('id = ?'), whereArgs: [id], limit: 1);
     if (rows.isEmpty) return null;
     return Leg.fromJson(_clean(rows.first));
@@ -409,7 +434,7 @@ class LocalDb {
 
   Future<List<Booking>> bookings({String? legId}) async {
     final rows = await db.query(
-      'bookings',
+      'booking',
       where: legId == null ? _activeWhere() : _activeWhere('leg_id = ?'),
       whereArgs: legId == null ? null : [legId],
       orderBy: 'start_date',
@@ -429,7 +454,7 @@ class LocalDb {
       args.add(done ? 1 : 0);
     }
     final rows = await db.query(
-      'tasks',
+      'task',
       where: clauses.join(' AND '),
       whereArgs: args.isEmpty ? null : args,
       orderBy: 'is_done, due_date',
@@ -439,7 +464,7 @@ class LocalDb {
 
   Future<List<PackingItem>> packing({String? tripId}) async {
     final rows = await db.query(
-      'packing_items',
+      'packing_item',
       where: tripId == null ? _activeWhere() : _activeWhere('trip_id = ?'),
       whereArgs: tripId == null ? null : [tripId],
       orderBy: 'category, sort_order',
@@ -449,7 +474,7 @@ class LocalDb {
 
   Future<List<JournalEntry>> journal({String? legId}) async {
     final rows = await db.query(
-      'journal_entries',
+      'journal_entry',
       where: legId == null ? _activeWhere() : _activeWhere('leg_id = ?'),
       whereArgs: legId == null ? null : [legId],
       orderBy: 'created_at DESC',
@@ -458,7 +483,7 @@ class LocalDb {
   }
 
   Future<Briefing?> latestBriefing() async {
-    final rows = await db.query('briefings',
+    final rows = await db.query('briefing',
         where: 'deleted_at IS NULL', orderBy: 'date DESC', limit: 1);
     if (rows.isEmpty) return null;
     return Briefing.fromJson(_clean(rows.first));
@@ -466,7 +491,7 @@ class LocalDb {
 
   Future<void> upsertBriefing(Briefing b) async {
     await db.insert(
-      'briefings',
+      'briefing',
       {
         'id': b.id,
         'date': b.date,
