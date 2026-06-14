@@ -50,6 +50,7 @@ class BaseRepository:
         *,
         include_deleted: bool = False,
         order_by: Optional[str] = None,
+        limit: Optional[int] = None,
     ) -> list[dict]:
         where, params = [], []
         if not include_deleted:
@@ -62,6 +63,9 @@ class BaseRepository:
             sql += " WHERE " + " AND ".join(where)
         if order_by:
             sql += f" ORDER BY {order_by}"
+        if limit is not None:
+            sql += " LIMIT ?"
+            params.append(limit)
         return [dict(r) for r in self.db.execute(sql, params).fetchall()]
 
     def get(self, entity_id: str, *, include_deleted: bool = False) -> Optional[dict]:
