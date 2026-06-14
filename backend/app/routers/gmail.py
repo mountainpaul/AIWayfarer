@@ -111,7 +111,7 @@ def scan_offers(
     """
     try:
         rows = db.execute(
-            "SELECT id, name, start_date, end_date FROM legs ORDER BY start_date"
+            "SELECT id, name, start_date, end_date FROM leg ORDER BY start_date"
         ).fetchall()
         legs = [dict(r) for r in rows]
         today = datetime.now(timezone.utc).date().isoformat()
