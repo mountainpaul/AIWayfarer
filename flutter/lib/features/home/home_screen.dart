@@ -73,6 +73,15 @@ class HomeScreen extends ConsumerWidget {
             error: (e, _) => _ErrorCard(error: '$e'),
           ),
 
+          // Schengen 90/180 card (server-computed; hidden when offline or no
+          // Schengen days). Surfaces a warning well before an overstay.
+          ref.watch(schengenProvider).maybeWhen(
+            data: (s) => (s == null || (s['peak_days'] ?? 0) == 0)
+                ? const SizedBox.shrink()
+                : _SchengenCard(report: s),
+            orElse: () => const SizedBox.shrink(),
+          ),
+
           // Next booking card
           nextBooking.when(
             data: (b) => b == null
@@ -117,6 +126,38 @@ class HomeScreen extends ConsumerWidget {
     }
     if (loc != null) parts.add(loc);
     return parts.join(' - ');
+  }
+}
+
+class _SchengenCard extends StatelessWidget {
+  const _SchengenCard({required this.report});
+  final Map<String, dynamic> report;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = report['status'] as String? ?? 'ok';
+    final used = report['days_used'] ?? 0;
+    final limit = report['limit_days'] ?? 90;
+    final remaining = report['days_remaining'] ?? 0;
+    final color = switch (status) {
+      'exceeded' => Colors.red,
+      'warning' => Colors.orange,
+      _ => Colors.green,
+    };
+    final detail = StringBuffer('$remaining of $limit days remaining');
+    if (report['ever_exceeds'] == true) {
+      detail.write(' · ⚠ exceeds 90 by ${report['peak_date']}');
+    } else if (status != 'ok') {
+      detail.write(' · approaching the limit');
+    }
+    return Card(
+      child: ListTile(
+        leading: Icon(Icons.flight_takeoff, color: color),
+        title: Text('Schengen: $used / $limit days used'),
+        subtitle: Text(detail.toString()),
+        trailing: Icon(Icons.circle, color: color, size: 12),
+      ),
+    );
   }
 }
 

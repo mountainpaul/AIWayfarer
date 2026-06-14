@@ -87,6 +87,18 @@ class ApiClient {
     await _dio.delete<void>('/trips/$id');
   }
 
+  // ── Schengen 90/180 tracker ──────────────────────────────
+  Future<Map<String, dynamic>> getSchengen({String? asOf, String? tripId}) async {
+    final r = await _dio.get<Map<String, dynamic>>(
+      '/schengen',
+      queryParameters: {
+        if (asOf != null) 'as_of': asOf,
+        if (tripId != null) 'trip_id': tripId,
+      },
+    );
+    return r.data ?? {};
+  }
+
   // ── Legs ─────────────────────────────────────────────────
   Future<List<Leg>> listLegs({String? tripId}) async {
     final r = await _dio.get<List<dynamic>>('/legs',

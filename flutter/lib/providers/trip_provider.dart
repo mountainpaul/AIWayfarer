@@ -82,6 +82,17 @@ final openTaskCountProvider = FutureProvider<int>((ref) async {
   return t.length;
 });
 
+/// Schengen 90/180 usage. Computed server-side, so null when the backend is
+/// unreachable (the card hides rather than showing stale numbers).
+final schengenProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
+  ref.watch(syncTriggerProvider);
+  try {
+    return await ref.read(apiClientProvider).getSchengen();
+  } catch (_) {
+    return null;
+  }
+});
+
 final packingForTripProvider =
     FutureProvider.family<List<PackingItem>, String>((ref, tripId) async {
   ref.watch(syncTriggerProvider);
