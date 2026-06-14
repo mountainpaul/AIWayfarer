@@ -15,6 +15,7 @@ from .routers import (
     journal,
     legs,
     packing,
+    schengen,
     sync,
     tasks,
     trips,
@@ -55,6 +56,7 @@ def create_app() -> FastAPI:
         grounding.router,
         sync.router,
         changes.router,
+        schengen.router,
         calendar.router,
         gmail.router,
     ):

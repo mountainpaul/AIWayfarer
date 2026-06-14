@@ -291,6 +291,20 @@ class BriefingGenerateRequest(BaseModel):
     date: Optional[str] = None  # ISO date; defaults to "today" in caller's local sense
 
 
+# ── Schengen 90/180 tracker ─────────────────────────────────────
+
+class SchengenReport(BaseModel):
+    as_of: str
+    window_days: int
+    limit_days: int
+    days_used: int
+    days_remaining: int
+    status: Literal["ok", "warning", "exceeded"]
+    peak_days: int
+    peak_date: Optional[str] = None
+    ever_exceeds: bool
+
+
 # ── Sync snapshot ───────────────────────────────────────────────
 
 class SyncSnapshot(BaseModel):
