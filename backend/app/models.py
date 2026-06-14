@@ -291,6 +291,19 @@ class BriefingGenerateRequest(BaseModel):
     date: Optional[str] = None  # ISO date; defaults to "today" in caller's local sense
 
 
+# ── Budget rollup ───────────────────────────────────────────────
+
+class BudgetLine(BaseModel):
+    currency: str
+    planned_cents: int
+    actual_cents: int
+    remaining_cents: int
+
+
+class BudgetReport(BaseModel):
+    by_currency: list[BudgetLine] = Field(default_factory=list)
+
+
 # ── Accommodation coverage ──────────────────────────────────────
 
 class CoverageItem(BaseModel):

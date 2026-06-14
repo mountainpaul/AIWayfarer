@@ -7,6 +7,7 @@ from .errors import register_error_handlers
 from .routers import (
     bookings,
     briefing,
+    budget,
     calendar,
     changes,
     coverage,
@@ -59,6 +60,7 @@ def create_app() -> FastAPI:
         changes.router,
         schengen.router,
         coverage.router,
+        budget.router,
         calendar.router,
         gmail.router,
     ):
