@@ -104,6 +104,16 @@ final coverageProvider =
   }
 });
 
+/// Budget rollup (planned vs actual, per currency). Server-computed; null offline.
+final budgetProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
+  ref.watch(syncTriggerProvider);
+  try {
+    return await ref.read(apiClientProvider).getBudget();
+  } catch (_) {
+    return null;
+  }
+});
+
 final packingForTripProvider =
     FutureProvider.family<List<PackingItem>, String>((ref, tripId) async {
   ref.watch(syncTriggerProvider);

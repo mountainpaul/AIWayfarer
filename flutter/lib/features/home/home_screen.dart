@@ -91,6 +91,17 @@ class HomeScreen extends ConsumerWidget {
             orElse: () => const SizedBox.shrink(),
           ),
 
+          // Budget rollup card (server-computed; hidden when offline).
+          ref.watch(budgetProvider).maybeWhen(
+            data: (b) {
+              final lines = (b?['by_currency'] as List?) ?? const [];
+              return lines.isEmpty
+                  ? const SizedBox.shrink()
+                  : _BudgetCard(lines: lines.cast<Map<String, dynamic>>());
+            },
+            orElse: () => const SizedBox.shrink(),
+          ),
+
           // Next booking card
           nextBooking.when(
             data: (b) => b == null
@@ -165,6 +176,35 @@ class _SchengenCard extends StatelessWidget {
         title: Text('Schengen: $used / $limit days used'),
         subtitle: Text(detail.toString()),
         trailing: Icon(Icons.circle, color: color, size: 12),
+      ),
+    );
+  }
+}
+
+class _BudgetCard extends StatelessWidget {
+  const _BudgetCard({required this.lines});
+  final List<Map<String, dynamic>> lines;
+
+  static String _amt(num cents) => (cents / 100).toStringAsFixed(0);
+
+  @override
+  Widget build(BuildContext context) {
+    final overspent =
+        lines.any((l) => (l['remaining_cents'] ?? 0) < 0);
+    final subtitle = lines.map((l) {
+      final cur = l['currency'];
+      final planned = l['planned_cents'] ?? 0;
+      final actual = l['actual_cents'] ?? 0;
+      final rem = l['remaining_cents'] ?? 0;
+      return '$cur ${_amt(actual)} of ${_amt(planned)} spent · ${_amt(rem)} left';
+    }).join('\n');
+    return Card(
+      child: ListTile(
+        leading: Icon(Icons.account_balance_wallet,
+            color: overspent ? Colors.red : null),
+        title: const Text('Budget'),
+        subtitle: Text(subtitle),
+        isThreeLine: lines.length > 1,
       ),
     );
   }

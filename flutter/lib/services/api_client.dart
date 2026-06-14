@@ -109,6 +109,14 @@ class ApiClient {
         .toList();
   }
 
+  Future<Map<String, dynamic>> getBudget({String? tripId}) async {
+    final r = await _dio.get<Map<String, dynamic>>(
+      '/budget',
+      queryParameters: tripId == null ? null : {'trip_id': tripId},
+    );
+    return r.data ?? {};
+  }
+
   // ── Legs ─────────────────────────────────────────────────
   Future<List<Leg>> listLegs({String? tripId}) async {
     final r = await _dio.get<List<dynamic>>('/legs',
