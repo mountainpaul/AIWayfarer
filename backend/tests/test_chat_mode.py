@@ -31,7 +31,7 @@ def _capture_system_prompt():
 def test_planning_mode_reaches_system_prompt():
     captured, fake = _capture_system_prompt()
     with patch.object(claude_svc, "call_chat", side_effect=fake):
-        r = client.post("/chat", json={"message": "what should I book", "mode": "planning"})
+        r = client.post("/api/v1/chat", json={"message": "what should I book", "mode": "planning"})
         assert r.status_code == 200
     assert "PLANNING" in captured["system"]
     assert "COMPANION" not in captured["system"].split("PLANNING", 1)[0]
@@ -40,7 +40,7 @@ def test_planning_mode_reaches_system_prompt():
 def test_companion_mode_reaches_system_prompt():
     captured, fake = _capture_system_prompt()
     with patch.object(claude_svc, "call_chat", side_effect=fake):
-        r = client.post("/chat", json={"message": "where am I", "mode": "companion"})
+        r = client.post("/api/v1/chat", json={"message": "where am I", "mode": "companion"})
         assert r.status_code == 200
     assert "COMPANION" in captured["system"]
 
@@ -48,7 +48,7 @@ def test_companion_mode_reaches_system_prompt():
 def test_default_mode_is_companion():
     captured, fake = _capture_system_prompt()
     with patch.object(claude_svc, "call_chat", side_effect=fake):
-        r = client.post("/chat", json={"message": "no mode given"})
+        r = client.post("/api/v1/chat", json={"message": "no mode given"})
         assert r.status_code == 200
     assert "COMPANION" in captured["system"]
 
@@ -63,7 +63,7 @@ def test_iterations_use_label_content_keys():
 <confidence>high</confidence>
 """
     with patch.object(claude_svc, "call_chat", return_value=raw):
-        body = client.post("/chat", json={"message": "x"}).json()
+        body = client.post("/api/v1/chat", json={"message": "x"}).json()
     assert body["iterations"]
     for step in body["iterations"]:
         assert "label" in step

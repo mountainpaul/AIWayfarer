@@ -23,13 +23,13 @@ FLUTTER_EXPECTED_TABLES = {
 
 
 def test_sync_snapshot_keys_match_flutter_expectations():
-    body = client.get("/sync/snapshot").json()
+    body = client.get("/api/v1/sync/snapshot").json()
     missing = FLUTTER_EXPECTED_TABLES - body.keys()
     assert not missing, f"backend missing keys Flutter expects: {missing}"
 
 
 def test_sync_snapshot_lists_are_well_formed():
-    body = client.get("/sync/snapshot").json()
+    body = client.get("/api/v1/sync/snapshot").json()
     for key in FLUTTER_EXPECTED_TABLES:
         rows = body[key]
         assert isinstance(rows, list)
@@ -39,7 +39,7 @@ def test_sync_snapshot_lists_are_well_formed():
 
 
 def test_sync_snapshot_includes_current_leg_when_in_window():
-    body = client.get("/sync/snapshot").json()
+    body = client.get("/api/v1/sync/snapshot").json()
     legs = body["legs"]
     assert len(legs) == 8
     # current_leg may be null if today is outside the trip window — that's fine.
@@ -50,7 +50,7 @@ def test_sync_snapshot_includes_current_leg_when_in_window():
 def test_sync_snapshot_bookings_include_current_leg_history():
     """Once you're on a leg, that leg's full booking list (incl. past dates)
     must be cacheable for offline browsing — Q1 in the review."""
-    body = client.get("/sync/snapshot").json()
+    body = client.get("/api/v1/sync/snapshot").json()
     if body.get("current_leg") is None:
         return  # outside trip window in this test run; nothing to assert
     leg_id = body["current_leg"]["id"]

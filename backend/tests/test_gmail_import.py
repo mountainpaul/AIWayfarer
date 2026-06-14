@@ -13,18 +13,18 @@ client = TestClient(app)
 
 
 def _sicily_leg_id() -> str:
-    legs = client.get("/legs").json()
+    legs = client.get("/api/v1/legs").json()
     return next(l["id"] for l in legs if l["slug"] == "sicily")
 
 
 def _cleanup(ids: list[str]) -> None:
     for booking_id in ids:
-        client.delete(f"/bookings/{booking_id}")
+        client.delete(f"/api/v1/bookings/{booking_id}")
 
 
 def test_import_sanitizes_llm_origin_fields():
     leg_id = _sicily_leg_id()
-    r = client.post("/gmail/import-bookings", json=[
+    r = client.post("/api/v1/gmail/import-bookings", json=[
         {
             "leg_id": leg_id,
             "type": "bus",              # not a valid enum -> "other"
@@ -41,7 +41,7 @@ def test_import_sanitizes_llm_origin_fields():
     assert body["imported"] == 1
     ids = body["ids"]
     try:
-        fetched = client.get(f"/bookings/{ids[0]}")
+        fetched = client.get(f"/api/v1/bookings/{ids[0]}")
         # The strict Pydantic read model must accept what import wrote.
         assert fetched.status_code == 200
         b = fetched.json()
@@ -52,7 +52,7 @@ def test_import_sanitizes_llm_origin_fields():
         assert b["cost_cents"] is None
         assert b["currency"] == "EUR"
         # And the whole list still serializes.
-        assert client.get("/bookings").status_code == 200
+        assert client.get("/api/v1/bookings").status_code == 200
     finally:
         _cleanup(ids)
 
@@ -70,14 +70,14 @@ def test_import_skips_unknown_leg_and_duplicates():
         {"leg_id": leg_id, "type": "hotel", "name": "Dup Inn",
          "start_date": "2026-04-21"},
     ]
-    r = client.post("/gmail/import-bookings", json=batch)
+    r = client.post("/api/v1/gmail/import-bookings", json=batch)
     assert r.status_code == 200
     body = r.json()
     try:
         assert body["imported"] == 1
         assert body["skipped"] == 3
         # Re-importing the same batch creates nothing.
-        r2 = client.post("/gmail/import-bookings", json=batch)
+        r2 = client.post("/api/v1/gmail/import-bookings", json=batch)
         assert r2.json()["imported"] == 0
     finally:
         _cleanup(body["ids"])
@@ -88,19 +88,19 @@ def test_scan_maps_gmail_errors_to_502_and_unconfigured_to_503():
         gmail_scanner, "scan_and_parse",
         side_effect=gmail_scanner.GmailApiError("quota"),
     ):
-        assert client.post("/gmail/scan-bookings").status_code == 502
+        assert client.post("/api/v1/gmail/scan-bookings").status_code == 502
 
     from app.services import google_auth
     with patch.object(
         gmail_scanner, "scan_and_parse",
         side_effect=google_auth.GoogleNotConfiguredError("no token"),
     ):
-        assert client.post("/gmail/scan-bookings").status_code == 503
+        assert client.post("/api/v1/gmail/scan-bookings").status_code == 503
 
 
 def test_scan_flags_existing_bookings():
     leg_id = _sicily_leg_id()
-    created = client.post("/bookings", json={
+    created = client.post("/api/v1/bookings", json={
         "leg_id": leg_id, "type": "train", "name": "Known Train",
         "status": "booked", "start_date": "2026-04-23",
         "confirmation": "SCANTEST1",
@@ -113,7 +113,7 @@ def test_scan_flags_existing_bookings():
     ]
     try:
         with patch.object(gmail_scanner, "scan_and_parse", return_value=candidates):
-            r = client.post("/gmail/scan-bookings")
+            r = client.post("/api/v1/gmail/scan-bookings")
         assert r.status_code == 200
         out = {c["name"]: c["already_exists"] for c in r.json()["candidates"]}
         assert out["Known Train"] is True

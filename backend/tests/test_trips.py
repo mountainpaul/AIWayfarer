@@ -14,7 +14,7 @@ def test_health():
 
 
 def test_list_trips_returns_seed_data():
-    r = client.get("/trips")
+    r = client.get("/api/v1/trips")
     assert r.status_code == 200
     trips = r.json()
     assert len(trips) >= 1
@@ -22,21 +22,21 @@ def test_list_trips_returns_seed_data():
 
 
 def test_list_legs_count():
-    r = client.get("/legs")
+    r = client.get("/api/v1/legs")
     assert r.status_code == 200
     legs = r.json()
     assert len(legs) == 8
 
 
 def test_list_bookings_count():
-    r = client.get("/bookings")
+    r = client.get("/api/v1/bookings")
     assert r.status_code == 200
     bookings = r.json()
     assert len(bookings) == 55
 
 
 def test_grounding_payload_shape():
-    r = client.get("/grounding")
+    r = client.get("/api/v1/grounding")
     assert r.status_code == 200
     body = r.json()
     assert "local_time_iso" in body
@@ -45,7 +45,7 @@ def test_grounding_payload_shape():
 
 
 def test_sync_snapshot():
-    r = client.get("/sync/snapshot")
+    r = client.get("/api/v1/sync/snapshot")
     assert r.status_code == 200
     body = r.json()
     assert "generated_at" in body
@@ -55,4 +55,4 @@ def test_sync_snapshot():
 
 def test_gmail_stub_returns_empty_list():
     # Gmail still a stub in v0.5; calendar has been replaced with the real router.
-    assert client.get("/gmail/threads").json() == []
+    assert client.get("/api/v1/gmail/threads").json() == []

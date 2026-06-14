@@ -1,8 +1,9 @@
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from . import config
 from .db import apply_migrations
+from .errors import register_error_handlers
 from .routers import (
     bookings,
     briefing,
@@ -37,20 +38,30 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    app.include_router(trips.router)
-    app.include_router(legs.router)
-    app.include_router(bookings.router)
-    app.include_router(tasks.router)
-    app.include_router(packing.router)
-    app.include_router(journal.router)
-    app.include_router(chat.router)
-    app.include_router(briefing.router)
-    app.include_router(grounding.router)
-    app.include_router(sync.router)
-    app.include_router(changes.router)
-    app.include_router(calendar.router)
-    app.include_router(gmail.router)
+    register_error_handlers(app)
 
+    # All resource routes are versioned under /api/v1 (BEST_PRACTICES.md §4) so
+    # future breaking changes can ship as /api/v2 without breaking live clients.
+    api_v1 = APIRouter(prefix="/api/v1")
+    for r in (
+        trips.router,
+        legs.router,
+        bookings.router,
+        tasks.router,
+        packing.router,
+        journal.router,
+        chat.router,
+        briefing.router,
+        grounding.router,
+        sync.router,
+        changes.router,
+        calendar.router,
+        gmail.router,
+    ):
+        api_v1.include_router(r)
+    app.include_router(api_v1)
+
+    # /health stays unversioned — it's an ops/liveness probe, not a resource.
     @app.get("/health", tags=["meta"])
     def health():
         return {

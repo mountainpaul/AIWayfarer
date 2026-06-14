@@ -55,7 +55,7 @@ def test_briefing_today_returns_404_when_none_exists():
     c.commit()
     c.close()
 
-    r = client.get("/briefing/today")
+    r = client.get("/api/v1/briefing/today")
     assert r.status_code == 404
 
 
@@ -64,7 +64,7 @@ def test_briefing_generate_falls_back_when_anthropic_unavailable():
         raise claude_svc.ClaudeUnavailableError("no key")
 
     with patch.object(claude_svc, "call_simple", side_effect=_raise):
-        r = client.post("/briefing/generate", json={"date": "2026-04-15"})
+        r = client.post("/api/v1/briefing/generate", json={"date": "2026-04-15"})
         assert r.status_code == 200
         body = r.json()
         assert body["date"] == "2026-04-15"
@@ -73,14 +73,14 @@ def test_briefing_generate_falls_back_when_anthropic_unavailable():
 
 def test_briefing_generate_uses_claude_rephrasing_when_available():
     with patch.object(claude_svc, "call_simple", return_value="# Rephrased\n- bullet"):
-        r = client.post("/briefing/generate", json={"date": "2026-04-16"})
+        r = client.post("/api/v1/briefing/generate", json={"date": "2026-04-16"})
         assert r.status_code == 200
         assert r.json()["markdown"] == "# Rephrased\n- bullet"
 
 
 def test_briefing_generate_is_idempotent_on_same_date():
-    client.post("/briefing/generate", json={"date": "2026-04-17"})
-    r2 = client.post("/briefing/generate", json={"date": "2026-04-17"})
+    client.post("/api/v1/briefing/generate", json={"date": "2026-04-17"})
+    r2 = client.post("/api/v1/briefing/generate", json={"date": "2026-04-17"})
     assert r2.status_code == 200
     rows = _conn().execute(
         "SELECT COUNT(*) AS n FROM briefing WHERE date = ?", ("2026-04-17",)
@@ -89,8 +89,8 @@ def test_briefing_generate_is_idempotent_on_same_date():
 
 
 def test_briefing_today_returns_markdown_content_type():
-    client.post("/briefing/generate", json={"date": "2026-04-18"})
-    r = client.get("/briefing/today")
+    client.post("/api/v1/briefing/generate", json={"date": "2026-04-18"})
+    r = client.get("/api/v1/briefing/today")
     assert r.status_code == 200
     assert r.headers["content-type"].startswith("text/markdown")
     # Content is either deterministic ("# Briefing") or Claude-rephrased.

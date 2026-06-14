@@ -38,7 +38,7 @@ Take the Virtu Ferries crossing Pozzallo → Valletta at 17:00. Catamaran, ~1h45
 def test_chat_parses_structured_response():
     with patch.object(claude_svc, "call_chat", return_value=MOCK_RESPONSE):
         r = client.post(
-            "/chat",
+            "/api/v1/chat",
             json={"message": "When does the ferry leave?", "mode": "companion"},
         )
         assert r.status_code == 200
@@ -55,19 +55,19 @@ def test_chat_returns_503_when_anthropic_unavailable():
         raise claude_svc.ClaudeUnavailableError("ANTHROPIC_API_KEY is not set.")
 
     with patch.object(claude_svc, "call_chat", side_effect=_raise):
-        r = client.post("/chat", json={"message": "hi"})
+        r = client.post("/api/v1/chat", json={"message": "hi"})
         assert r.status_code == 503
-        assert "ANTHROPIC_API_KEY" in r.json()["detail"]
+        assert "ANTHROPIC_API_KEY" in r.json()["message"]
 
 
 def test_chat_rejects_empty_message():
-    r = client.post("/chat", json={"message": "   "})
+    r = client.post("/api/v1/chat", json={"message": "   "})
     assert r.status_code == 400
 
 
 def test_chat_falls_back_to_medium_confidence_on_unparseable_response():
     with patch.object(claude_svc, "call_chat", return_value="some unstructured reply"):
-        r = client.post("/chat", json={"message": "hi"})
+        r = client.post("/api/v1/chat", json={"message": "hi"})
         assert r.status_code == 200
         body = r.json()
         assert body["confidence"] == "medium"
