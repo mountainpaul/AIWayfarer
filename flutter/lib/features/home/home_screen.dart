@@ -82,6 +82,15 @@ class HomeScreen extends ConsumerWidget {
             orElse: () => const SizedBox.shrink(),
           ),
 
+          // Accommodation-coverage card (server-computed; hidden when offline).
+          ref.watch(coverageProvider).maybeWhen(
+            data: (items) =>
+                items == null || items.isEmpty
+                    ? const SizedBox.shrink()
+                    : _CoverageCard(items: items),
+            orElse: () => const SizedBox.shrink(),
+          ),
+
           // Next booking card
           nextBooking.when(
             data: (b) => b == null
@@ -156,6 +165,36 @@ class _SchengenCard extends StatelessWidget {
         title: Text('Schengen: $used / $limit days used'),
         subtitle: Text(detail.toString()),
         trailing: Icon(Icons.circle, color: color, size: 12),
+      ),
+    );
+  }
+}
+
+class _CoverageCard extends StatelessWidget {
+  const _CoverageCard({required this.items});
+  final List<Map<String, dynamic>> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final gaps =
+        items.where((i) => (i['unbooked_nights'] ?? 0) > 0).toList();
+    if (gaps.isEmpty) {
+      return const Card(
+        child: ListTile(
+          leading: Icon(Icons.hotel, color: Colors.green),
+          title: Text('All lodging booked'),
+          subtitle: Text('Every leg has accommodation for every night.'),
+        ),
+      );
+    }
+    final summary = gaps
+        .map((g) => '${g['leg_name']} (${g['unbooked_nights']})')
+        .join(', ');
+    return Card(
+      child: ListTile(
+        leading: const Icon(Icons.hotel, color: Colors.orange),
+        title: Text('${gaps.length} leg(s) need lodging'),
+        subtitle: Text('Unbooked nights — $summary'),
       ),
     );
   }

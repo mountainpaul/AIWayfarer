@@ -93,6 +93,17 @@ final schengenProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
   }
 });
 
+/// Per-leg accommodation coverage. Computed server-side; null when offline.
+final coverageProvider =
+    FutureProvider<List<Map<String, dynamic>>?>((ref) async {
+  ref.watch(syncTriggerProvider);
+  try {
+    return await ref.read(apiClientProvider).getCoverage();
+  } catch (_) {
+    return null;
+  }
+});
+
 final packingForTripProvider =
     FutureProvider.family<List<PackingItem>, String>((ref, tripId) async {
   ref.watch(syncTriggerProvider);

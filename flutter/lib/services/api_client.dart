@@ -99,6 +99,16 @@ class ApiClient {
     return r.data ?? {};
   }
 
+  Future<List<Map<String, dynamic>>> getCoverage({String? tripId}) async {
+    final r = await _dio.get<List<dynamic>>(
+      '/coverage',
+      queryParameters: tripId == null ? null : {'trip_id': tripId},
+    );
+    return (r.data ?? [])
+        .map((e) => Map<String, dynamic>.from(e as Map))
+        .toList();
+  }
+
   // ── Legs ─────────────────────────────────────────────────
   Future<List<Leg>> listLegs({String? tripId}) async {
     final r = await _dio.get<List<dynamic>>('/legs',
