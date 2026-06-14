@@ -7,6 +7,7 @@ from .routers import (
     bookings,
     briefing,
     calendar,
+    changes,
     chat,
     gmail,
     grounding,
@@ -46,6 +47,7 @@ def create_app() -> FastAPI:
     app.include_router(briefing.router)
     app.include_router(grounding.router)
     app.include_router(sync.router)
+    app.include_router(changes.router)
     app.include_router(calendar.router)
     app.include_router(gmail.router)
 

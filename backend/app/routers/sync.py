@@ -1,6 +1,7 @@
 import sqlite3
 from datetime import date as date_cls, datetime, timezone
-from fastapi import APIRouter, Depends
+from typing import Optional
+from fastapi import APIRouter, Depends, Query
 
 from ..db import get_db
 from ..models import (
@@ -36,70 +37,65 @@ def _row_to_packing(row: sqlite3.Row) -> PackingItem:
 
 
 @router.get("/snapshot", response_model=SyncSnapshot)
-def snapshot(db: sqlite3.Connection = Depends(get_db)):
+def snapshot(
+    since: Optional[str] = Query(
+        None,
+        description="ISO timestamp cursor. When set, returns only rows whose "
+        "updated_at is strictly greater (a delta), including tombstoned rows "
+        "(deleted_at set) so deletes propagate. Omit for a full snapshot.",
+    ),
+    db: sqlite3.Connection = Depends(get_db),
+):
     """
-    Offline cache bundle (spec §9, §10). Returns the full Trip HQ shape so the
-    Flutter local SQLite cache can mirror the backend. Field set must match
-    flutter/lib/services/sync_service.dart.
+    Offline cache bundle (spec §9, §10). The Flutter client *merges* this into
+    its local SQLite by last-write-wins (updated_at), so:
+
+    - We return EVERY row, including past legs / done tasks and tombstones —
+      completeness matters; the client decides what to show. (Dropping rows
+      here previously caused the client to delete valid local records.)
+    - deleted_at rides on every row so soft-deletes propagate.
+    - `since` enables cheap delta sync; the client passes back `server_time`.
+
+    Field set must match flutter/lib/services/sync_service.dart.
     """
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     today = date_cls.today().isoformat()
 
+    # COALESCE(updated_at, created_at) guards rows whose updated_at was never set
+    # (e.g. legacy journal rows before the timestamp backfill).
+    def rows(table: str):
+        if since is not None:
+            # >= (not >) at the boundary: timestamps are second-granular, so a
+            # change made in the same second as the cursor must not be missed.
+            # Re-fetching boundary rows is harmless — the client merge is
+            # idempotent (last-write-wins).
+            return db.execute(
+                f"SELECT * FROM {table} "
+                f"WHERE COALESCE(updated_at, created_at) >= ? "
+                f"ORDER BY COALESCE(updated_at, created_at) ASC",
+                (since,),
+            ).fetchall()
+        return db.execute(f"SELECT * FROM {table}").fetchall()
+
+    # current_leg is a convenience pointer for the home screen — never a tombstone.
     leg_row = db.execute(
-        """SELECT * FROM legs WHERE date(?) BETWEEN date(start_date) AND date(end_date)
+        """SELECT * FROM legs
+           WHERE deleted_at IS NULL
+             AND date(?) BETWEEN date(start_date) AND date(end_date)
            ORDER BY start_date ASC LIMIT 1""",
         (today,),
     ).fetchone()
     current_leg = _row_to_leg(leg_row) if leg_row else None
 
-    trip_rows = db.execute("SELECT * FROM trips ORDER BY start_date ASC").fetchall()
-    leg_rows = db.execute("SELECT * FROM legs ORDER BY sort_order ASC").fetchall()
-
-    # Bookings: include all of the current leg's history plus everything
-    # current/future across the trip. Past legs are dropped to keep payload small.
-    if current_leg:
-        booking_rows = db.execute(
-            """SELECT * FROM bookings
-               WHERE leg_id = ?
-                  OR end_date IS NULL
-                  OR date(end_date) >= date(?)
-               ORDER BY COALESCE(start_date, '9999') ASC""",
-            (current_leg.id, today),
-        ).fetchall()
-    else:
-        booking_rows = db.execute(
-            """SELECT * FROM bookings
-               WHERE end_date IS NULL OR date(end_date) >= date(?)
-               ORDER BY COALESCE(start_date, '9999') ASC""",
-            (today,),
-        ).fetchall()
-
-    # Tasks: open OR due today/later. Closed-and-overdue tasks dropped.
-    task_rows = db.execute(
-        """SELECT * FROM tasks
-           WHERE is_done = 0 OR (due_date IS NOT NULL AND date(due_date) >= date(?))
-           ORDER BY CASE priority
-               WHEN 'critical' THEN 0 WHEN 'high' THEN 1
-               WHEN 'medium' THEN 2 WHEN 'low' THEN 3 END,
-               COALESCE(due_date, '9999') ASC""",
-        (today,),
-    ).fetchall()
-
-    packing_rows = db.execute(
-        "SELECT * FROM packing_items ORDER BY sort_order ASC"
-    ).fetchall()
-
-    # Journal: most recent 200 entries.
-    journal_rows = db.execute(
-        "SELECT * FROM journal_entries ORDER BY created_at DESC LIMIT 200"
-    ).fetchall()
-
     return SyncSnapshot(
-        generated_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        generated_at=now,
+        server_time=now,
+        is_delta=since is not None,
         current_leg=current_leg,
-        trips=[Trip(**dict(r)) for r in trip_rows],
-        legs=[_row_to_leg(r) for r in leg_rows],
-        bookings=[_row_to_booking(r) for r in booking_rows],
-        tasks=[_row_to_task(r) for r in task_rows],
-        packing_items=[_row_to_packing(r) for r in packing_rows],
-        journal_entries=[JournalEntry(**dict(r)) for r in journal_rows],
+        trips=[Trip(**dict(r)) for r in rows("trips")],
+        legs=[_row_to_leg(r) for r in rows("legs")],
+        bookings=[_row_to_booking(r) for r in rows("bookings")],
+        tasks=[_row_to_task(r) for r in rows("tasks")],
+        packing_items=[_row_to_packing(r) for r in rows("packing_items")],
+        journal_entries=[JournalEntry(**dict(r)) for r in rows("journal_entries")],
     )

@@ -22,6 +22,7 @@ class Trip(BaseModel):
     end_date: str
     created_at: str
     updated_at: str
+    deleted_at: Optional[str] = None
 
 
 # ── Leg ─────────────────────────────────────────────────────────
@@ -44,6 +45,7 @@ class Leg(BaseModel):
     sort_order: int
     created_at: str
     updated_at: str
+    deleted_at: Optional[str] = None
 
 
 class LegUpdate(BaseModel):
@@ -80,6 +82,7 @@ class Booking(BaseModel):
     notes: Optional[str] = None
     created_at: str
     updated_at: str
+    deleted_at: Optional[str] = None
 
 
 class BookingCreate(BaseModel):
@@ -127,6 +130,7 @@ class Task(BaseModel):
     notes: Optional[str] = None
     created_at: str
     updated_at: str
+    deleted_at: Optional[str] = None
 
 
 class TaskCreate(BaseModel):
@@ -159,6 +163,7 @@ class PackingItem(BaseModel):
     sort_order: int
     created_at: str
     updated_at: str
+    deleted_at: Optional[str] = None
 
 
 class PackingItemCreate(BaseModel):
@@ -188,6 +193,8 @@ class JournalEntry(BaseModel):
     location_lat: Optional[float] = None
     location_lon: Optional[float] = None
     created_at: str
+    updated_at: Optional[str] = None
+    deleted_at: Optional[str] = None
 
 
 class JournalEntryCreate(BaseModel):
@@ -244,6 +251,8 @@ class Briefing(BaseModel):
     date: str
     markdown: str
     created_at: str
+    updated_at: Optional[str] = None
+    deleted_at: Optional[str] = None
 
 
 class BriefingGenerateRequest(BaseModel):
@@ -254,6 +263,11 @@ class BriefingGenerateRequest(BaseModel):
 
 class SyncSnapshot(BaseModel):
     generated_at: str
+    # Cursor the client stores and passes back as ?since= for the next delta sync.
+    server_time: str
+    # True when this is a delta (since= was provided): rows are only those changed
+    # after the cursor, and tombstoned rows may be present (deleted_at set).
+    is_delta: bool = False
     current_leg: Optional[Leg] = None
     trips: list[Trip] = Field(default_factory=list)
     legs: list[Leg] = Field(default_factory=list)

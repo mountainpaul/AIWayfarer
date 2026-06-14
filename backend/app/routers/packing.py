@@ -1,12 +1,18 @@
 import sqlite3
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..db import get_db
 from ..models import PackingItem, PackingItemCreate, PackingItemUpdate
+from ..services import changelog
 
 router = APIRouter(prefix="/packing", tags=["packing"])
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _row_to_item(row: sqlite3.Row) -> PackingItem:
@@ -22,7 +28,7 @@ def list_items(
     db: sqlite3.Connection = Depends(get_db),
 ):
     sql = "SELECT * FROM packing_items"
-    where: list[str] = []
+    where: list[str] = ["deleted_at IS NULL"]
     params: list = []
     if trip_id:
         where.append("trip_id = ?"); params.append(trip_id)
@@ -37,7 +43,9 @@ def list_items(
 
 @router.get("/{item_id}", response_model=PackingItem)
 def get_item(item_id: str, db: sqlite3.Connection = Depends(get_db)):
-    row = db.execute("SELECT * FROM packing_items WHERE id = ?", (item_id,)).fetchone()
+    row = db.execute(
+        "SELECT * FROM packing_items WHERE id = ? AND deleted_at IS NULL", (item_id,)
+    ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="packing item not found")
     return _row_to_item(row)
@@ -56,12 +64,16 @@ def create_item(payload: PackingItemCreate, db: sqlite3.Connection = Depends(get
          1 if payload.is_packed else 0, payload.sort_order),
     )
     row = db.execute("SELECT * FROM packing_items WHERE id = ?", (new_id,)).fetchone()
+    changelog.append(db, entity="packing", entity_id=new_id, op="create",
+                     new=dict(row))
     return _row_to_item(row)
 
 
 @router.patch("/{item_id}", response_model=PackingItem)
 def update_item(item_id: str, payload: PackingItemUpdate, db: sqlite3.Connection = Depends(get_db)):
-    existing = db.execute("SELECT * FROM packing_items WHERE id = ?", (item_id,)).fetchone()
+    existing = db.execute(
+        "SELECT * FROM packing_items WHERE id = ? AND deleted_at IS NULL", (item_id,)
+    ).fetchone()
     if not existing:
         raise HTTPException(status_code=404, detail="packing item not found")
     fields = payload.model_dump(exclude_unset=True)
@@ -69,19 +81,25 @@ def update_item(item_id: str, payload: PackingItemUpdate, db: sqlite3.Connection
         return _row_to_item(existing)
     if "is_packed" in fields:
         fields["is_packed"] = 1 if fields["is_packed"] else 0
+    old = {k: existing[k] for k in fields}
     set_clause = ", ".join(f"{k} = ?" for k in fields)
     params = list(fields.values()) + [item_id]
     db.execute(
         f"UPDATE packing_items SET {set_clause}, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?",
         params,
     )
+    changelog.append(db, entity="packing", entity_id=item_id, op="update",
+                     new=fields, old=old)
     row = db.execute("SELECT * FROM packing_items WHERE id = ?", (item_id,)).fetchone()
     return _row_to_item(row)
 
 
 @router.patch("/{item_id}/packed", response_model=PackingItem)
 def toggle_packed(item_id: str, db: sqlite3.Connection = Depends(get_db)):
-    row = db.execute("SELECT is_packed FROM packing_items WHERE id = ?", (item_id,)).fetchone()
+    row = db.execute(
+        "SELECT is_packed FROM packing_items WHERE id = ? AND deleted_at IS NULL",
+        (item_id,),
+    ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="packing item not found")
     new_val = 0 if row["is_packed"] else 1
@@ -89,13 +107,22 @@ def toggle_packed(item_id: str, db: sqlite3.Connection = Depends(get_db)):
         "UPDATE packing_items SET is_packed = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?",
         (new_val, item_id),
     )
+    changelog.append(db, entity="packing", entity_id=item_id, op="update",
+                     new={"is_packed": new_val}, old={"is_packed": row["is_packed"]})
     updated = db.execute("SELECT * FROM packing_items WHERE id = ?", (item_id,)).fetchone()
     return _row_to_item(updated)
 
 
 @router.delete("/{item_id}", status_code=204)
 def delete_item(item_id: str, db: sqlite3.Connection = Depends(get_db)):
-    cur = db.execute("DELETE FROM packing_items WHERE id = ?", (item_id,))
+    # Soft delete: tombstone so it's recoverable and propagates via sync.
+    now = _now()
+    cur = db.execute(
+        "UPDATE packing_items SET deleted_at = ?, updated_at = ? "
+        "WHERE id = ? AND deleted_at IS NULL",
+        (now, now, item_id),
+    )
     if cur.rowcount == 0:
         raise HTTPException(status_code=404, detail="packing item not found")
+    changelog.append(db, entity="packing", entity_id=item_id, op="delete")
     return None

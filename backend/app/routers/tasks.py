@@ -1,12 +1,18 @@
 import sqlite3
 import uuid
+from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..db import get_db
 from ..models import Task, TaskCreate, TaskUpdate
+from ..services import changelog
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _row_to_task(row: sqlite3.Row) -> Task:
@@ -22,7 +28,7 @@ def list_tasks(
     db: sqlite3.Connection = Depends(get_db),
 ):
     sql = "SELECT * FROM tasks"
-    where: list[str] = []
+    where: list[str] = ["deleted_at IS NULL"]
     params: list = []
     if leg_id:
         where.append("leg_id = ?"); params.append(leg_id)
@@ -40,7 +46,9 @@ def list_tasks(
 
 @router.get("/{task_id}", response_model=Task)
 def get_task(task_id: str, db: sqlite3.Connection = Depends(get_db)):
-    row = db.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    row = db.execute(
+        "SELECT * FROM tasks WHERE id = ? AND deleted_at IS NULL", (task_id,)
+    ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="task not found")
     return _row_to_task(row)
@@ -60,12 +68,16 @@ def create_task(payload: TaskCreate, db: sqlite3.Connection = Depends(get_db)):
          payload.due_date, 1 if payload.is_done else 0, payload.notes),
     )
     row = db.execute("SELECT * FROM tasks WHERE id = ?", (new_id,)).fetchone()
+    changelog.append(db, entity="task", entity_id=new_id, op="create",
+                     new=dict(row))
     return _row_to_task(row)
 
 
 @router.patch("/{task_id}", response_model=Task)
 def update_task(task_id: str, payload: TaskUpdate, db: sqlite3.Connection = Depends(get_db)):
-    existing = db.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    existing = db.execute(
+        "SELECT * FROM tasks WHERE id = ? AND deleted_at IS NULL", (task_id,)
+    ).fetchone()
     if not existing:
         raise HTTPException(status_code=404, detail="task not found")
     fields = payload.model_dump(exclude_unset=True)
@@ -73,19 +85,24 @@ def update_task(task_id: str, payload: TaskUpdate, db: sqlite3.Connection = Depe
         return _row_to_task(existing)
     if "is_done" in fields:
         fields["is_done"] = 1 if fields["is_done"] else 0
+    old = {k: existing[k] for k in fields}
     set_clause = ", ".join(f"{k} = ?" for k in fields)
     params = list(fields.values()) + [task_id]
     db.execute(
         f"UPDATE tasks SET {set_clause}, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?",
         params,
     )
+    changelog.append(db, entity="task", entity_id=task_id, op="update",
+                     new=fields, old=old)
     row = db.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
     return _row_to_task(row)
 
 
 @router.patch("/{task_id}/done", response_model=Task)
 def toggle_done(task_id: str, db: sqlite3.Connection = Depends(get_db)):
-    row = db.execute("SELECT is_done FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    row = db.execute(
+        "SELECT is_done FROM tasks WHERE id = ? AND deleted_at IS NULL", (task_id,)
+    ).fetchone()
     if not row:
         raise HTTPException(status_code=404, detail="task not found")
     new_val = 0 if row["is_done"] else 1
@@ -93,13 +110,22 @@ def toggle_done(task_id: str, db: sqlite3.Connection = Depends(get_db)):
         "UPDATE tasks SET is_done = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = ?",
         (new_val, task_id),
     )
+    changelog.append(db, entity="task", entity_id=task_id, op="update",
+                     new={"is_done": new_val}, old={"is_done": row["is_done"]})
     updated = db.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
     return _row_to_task(updated)
 
 
 @router.delete("/{task_id}", status_code=204)
 def delete_task(task_id: str, db: sqlite3.Connection = Depends(get_db)):
-    cur = db.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+    # Soft delete: tombstone so it's recoverable and propagates via sync.
+    now = _now()
+    cur = db.execute(
+        "UPDATE tasks SET deleted_at = ?, updated_at = ? "
+        "WHERE id = ? AND deleted_at IS NULL",
+        (now, now, task_id),
+    )
     if cur.rowcount == 0:
         raise HTTPException(status_code=404, detail="task not found")
+    changelog.append(db, entity="task", entity_id=task_id, op="delete")
     return None

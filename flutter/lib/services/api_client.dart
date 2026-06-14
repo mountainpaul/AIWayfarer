@@ -210,6 +210,9 @@ class ApiClient {
         'mode': mode,
         if (sessionId != null) 'session_id': sessionId,
       },
+      // Heavy-tier queries can run long; don't cut them off at the
+      // global 60s receiveTimeout.
+      options: Options(receiveTimeout: const Duration(minutes: 5)),
     );
     return ChatResponse.fromJson(r.data!);
   }
@@ -261,9 +264,51 @@ class ApiClient {
     return r.data ?? {};
   }
 
-  // ── Sync ─────────────────────────────────────────────────
-  Future<Map<String, dynamic>> syncSnapshot() async {
-    final r = await _dio.get<Map<String, dynamic>>('/sync/snapshot');
+  Future<Map<String, dynamic>> scanLoyaltyOffers({int months = 2}) async {
+    final r = await _dio.post<Map<String, dynamic>>(
+      '/gmail/scan-offers',
+      queryParameters: {'months': months},
+      options: Options(receiveTimeout: const Duration(minutes: 3)),
+    );
     return r.data ?? {};
   }
+
+  // ── Sync ─────────────────────────────────────────────────
+  /// Pull the sync bundle. Pass [since] (the previous response's `server_time`)
+  /// to fetch only rows changed after that cursor — a cheap delta.
+  Future<Map<String, dynamic>> syncSnapshot({String? since}) async {
+    final r = await _dio.get<Map<String, dynamic>>(
+      '/sync/snapshot',
+      queryParameters: since == null ? null : {'since': since},
+    );
+    return r.data ?? {};
+  }
+}
+
+/// Thrown when a request never reached the server (no connectivity / timeout),
+/// as opposed to the server responding with an error. The offline outbox uses
+/// this to decide whether to keep an op queued (unreachable) or drop it (the
+/// server responded). See SyncService._flushOutbox.
+class ApiUnreachable implements Exception {
+  ApiUnreachable(this.cause);
+  final Object cause;
+  @override
+  String toString() => 'ApiUnreachable: $cause';
+}
+
+/// Map a DioException to [ApiUnreachable] when it's a connectivity/timeout
+/// failure (no HTTP response was received).
+Object mapDioError(Object e) {
+  if (e is DioException) {
+    const unreachable = {
+      DioExceptionType.connectionError,
+      DioExceptionType.connectionTimeout,
+      DioExceptionType.sendTimeout,
+      DioExceptionType.receiveTimeout,
+    };
+    if (e.response == null && unreachable.contains(e.type)) {
+      return ApiUnreachable(e);
+    }
+  }
+  return e;
 }

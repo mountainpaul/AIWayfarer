@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/booking.dart';
@@ -150,8 +152,8 @@ class TripMutations {
       await ref.read(apiClientProvider).patchBooking(id, patch);
       await _refresh();
       return true;
-    } catch (_) {
-      return false;
+    } catch (e) {
+      return _queueIfOffline(e, 'bookings', 'booking', id, 'update', patch);
     }
   }
 
@@ -160,8 +162,8 @@ class TripMutations {
       await ref.read(apiClientProvider).deleteBooking(id);
       await _refresh();
       return true;
-    } catch (_) {
-      return false;
+    } catch (e) {
+      return _queueIfOffline(e, 'bookings', 'booking', id, 'delete', null);
     }
   }
 
@@ -180,8 +182,8 @@ class TripMutations {
       await ref.read(apiClientProvider).patchTask(id, patch);
       await _refresh();
       return true;
-    } catch (_) {
-      return false;
+    } catch (e) {
+      return _queueIfOffline(e, 'tasks', 'task', id, 'update', patch);
     }
   }
 
@@ -190,8 +192,8 @@ class TripMutations {
       await ref.read(apiClientProvider).deleteTask(id);
       await _refresh();
       return true;
-    } catch (_) {
-      return false;
+    } catch (e) {
+      return _queueIfOffline(e, 'tasks', 'task', id, 'delete', null);
     }
   }
 
@@ -213,6 +215,49 @@ class TripMutations {
     } catch (_) {
       return false;
     }
+  }
+
+  /// When a write fails only because the backend is unreachable, save it
+  /// locally (optimistic) and queue it in the outbox so it retries on the next
+  /// sync — then report success, because the change IS saved, just not yet
+  /// pushed. A genuine server rejection (4xx/5xx) returns false as before.
+  ///
+  /// This is the fix for the lost edit: editing a booking while offline no
+  /// longer fails-and-vanishes; it persists and syncs when connectivity returns.
+  Future<bool> _queueIfOffline(
+    Object error,
+    String table,
+    String entity,
+    String id,
+    String op,
+    Map<String, dynamic>? patch,
+  ) async {
+    if (mapDioError(error) is! ApiUnreachable) return false;
+    final db = ref.read(localDbProvider);
+    final now = _nowIso();
+    if (op == 'delete') {
+      await db.localTombstone(table, id, now);
+    } else if (patch != null) {
+      await db.localPatch(table, id, patch, now);
+    }
+    await db.enqueueOp(
+      entity: entity,
+      entityId: id,
+      op: op,
+      payloadJson: patch == null ? null : jsonEncode(patch),
+      queuedAt: now,
+    );
+    ref.read(syncTriggerProvider.notifier).state++;
+    return true;
+  }
+
+  /// UTC timestamp in the backend's exact format (no milliseconds) so local and
+  /// server updated_at values compare correctly for last-write-wins.
+  String _nowIso() {
+    final n = DateTime.now().toUtc();
+    String two(int x) => x.toString().padLeft(2, '0');
+    return '${n.year}-${two(n.month)}-${two(n.day)}'
+        'T${two(n.hour)}:${two(n.minute)}:${two(n.second)}Z';
   }
 
   Future<void> _refresh() async {

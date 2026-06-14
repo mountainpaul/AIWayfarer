@@ -13,11 +13,19 @@ import '../models/packing_item.dart';
 import '../models/task.dart';
 import '../models/trip.dart';
 
-/// Local SQLite cache. Schema mirrors backend/db/schema.sql.
-/// sqflite manages WAL itself, so we drop the explicit PRAGMA.
+/// Local SQLite cache. Schema mirrors backend/db/schema.sql + migrations.
+///
+/// Sync model (see docs/sync-redesign.md): the backend is NOT treated as
+/// authoritative. Incoming rows are MERGED by `updated_at` (last-write-wins),
+/// soft-deletes are tombstones (`deleted_at`), and local-only / newer-local
+/// rows are never destroyed. Local edits made while offline are queued in
+/// `pending_ops` and pushed on reconnect.
 class LocalDb {
   LocalDb._();
   static final LocalDb instance = LocalDb._();
+
+  /// Bump when the local schema changes; see [_onUpgrade].
+  static const _schemaVersion = 2;
 
   Database? _db;
   Database get db {
@@ -39,12 +47,48 @@ class LocalDb {
     }
     _db = await openDatabase(
       path,
-      version: 1,
+      version: _schemaVersion,
       onConfigure: (db) async {
         await db.execute('PRAGMA foreign_keys = ON');
       },
       onCreate: _createSchema,
+      onUpgrade: _onUpgrade,
     );
+  }
+
+  /// v1 -> v2: add soft-delete tombstones + the timestamps and outbox the
+  /// merge sync needs. Additive only — no existing row is rewritten beyond
+  /// backfilling a missing updated_at from created_at.
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      for (final t in [
+        'trips',
+        'legs',
+        'bookings',
+        'tasks',
+        'packing_items',
+        'journal_entries',
+        'briefings',
+      ]) {
+        await _addColumnIfMissing(db, t, 'deleted_at', 'TEXT');
+      }
+      await _addColumnIfMissing(db, 'journal_entries', 'updated_at', 'TEXT');
+      await _addColumnIfMissing(db, 'briefings', 'updated_at', 'TEXT');
+      await db.execute(
+          'UPDATE journal_entries SET updated_at = created_at WHERE updated_at IS NULL');
+      await db.execute(
+          'UPDATE briefings SET updated_at = created_at WHERE updated_at IS NULL');
+      await _createOutbox(db);
+    }
+  }
+
+  Future<void> _addColumnIfMissing(
+      Database db, String table, String column, String type) async {
+    final cols = await db.rawQuery('PRAGMA table_info($table)');
+    final exists = cols.any((c) => c['name'] == column);
+    if (!exists) {
+      await db.execute('ALTER TABLE $table ADD COLUMN $column $type');
+    }
   }
 
   Future<void> _createSchema(Database db, int version) async {
@@ -55,7 +99,8 @@ class LocalDb {
         start_date  TEXT NOT NULL,
         end_date    TEXT NOT NULL,
         created_at  TEXT,
-        updated_at  TEXT
+        updated_at  TEXT,
+        deleted_at  TEXT
       )
     ''');
 
@@ -76,7 +121,8 @@ class LocalDb {
         notes         TEXT,
         sort_order    INTEGER NOT NULL,
         created_at    TEXT,
-        updated_at    TEXT
+        updated_at    TEXT,
+        deleted_at    TEXT
       )
     ''');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_legs_trip ON legs(trip_id)');
@@ -100,7 +146,8 @@ class LocalDb {
         location_lon    REAL,
         notes           TEXT,
         created_at      TEXT,
-        updated_at      TEXT
+        updated_at      TEXT,
+        deleted_at      TEXT
       )
     ''');
     await db.execute(
@@ -122,7 +169,8 @@ class LocalDb {
         is_done     INTEGER NOT NULL DEFAULT 0,
         notes       TEXT,
         created_at  TEXT,
-        updated_at  TEXT
+        updated_at  TEXT,
+        deleted_at  TEXT
       )
     ''');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_tasks_leg ON tasks(leg_id)');
@@ -140,7 +188,8 @@ class LocalDb {
         is_packed   INTEGER NOT NULL DEFAULT 0,
         sort_order  INTEGER NOT NULL,
         created_at  TEXT,
-        updated_at  TEXT
+        updated_at  TEXT,
+        deleted_at  TEXT
       )
     ''');
     await db.execute(
@@ -155,7 +204,9 @@ class LocalDb {
         location_name   TEXT,
         location_lat    REAL,
         location_lon    REAL,
-        created_at      TEXT
+        created_at      TEXT,
+        updated_at      TEXT,
+        deleted_at      TEXT
       )
     ''');
     await db.execute(
@@ -166,21 +217,42 @@ class LocalDb {
         'CREATE INDEX IF NOT EXISTS idx_journal_created ON journal_entries(created_at)');
 
     // Briefings - local cache only; backend canonical.
-    // Schema mirrors backend: {id, date, markdown, created_at}.
     await db.execute('''
       CREATE TABLE IF NOT EXISTS briefings (
         id          TEXT PRIMARY KEY,
         date        TEXT NOT NULL UNIQUE,
         markdown    TEXT NOT NULL,
-        created_at  TEXT
+        created_at  TEXT,
+        updated_at  TEXT,
+        deleted_at  TEXT
       )
     ''');
+
+    await _createOutbox(db);
   }
 
-  // Generic helpers
+  /// Outbox of local mutations that still need to reach the backend. A write
+  /// made while offline is applied to the local cache immediately AND recorded
+  /// here, then flushed by SyncService on the next successful connection. This
+  /// is what keeps an edit-while-offline from vanishing.
+  Future<void> _createOutbox(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS pending_ops (
+        op_id       INTEGER PRIMARY KEY AUTOINCREMENT,
+        entity      TEXT NOT NULL,   -- 'booking' | 'task' | 'packing'
+        entity_id   TEXT NOT NULL,
+        op          TEXT NOT NULL,   -- 'create' | 'update' | 'delete'
+        payload     TEXT,            -- JSON body for create/update
+        queued_at   TEXT NOT NULL
+      )
+    ''');
+    await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_pending_ops_queued ON pending_ops(queued_at)');
+  }
+
+  // ── Generic write helpers ──────────────────────────────────
 
   // SQLite stores 0/1 for booleans, but the Freezed models declare `bool`.
-  // Convert at the sqflite boundary in both directions.
   static const _boolColumns = {'is_done', 'is_packed', 'is_schengen'};
 
   Future<void> upsertAll(String table, List<Map<String, dynamic>> rows) async {
@@ -193,25 +265,76 @@ class LocalDb {
     await batch.commit(noResult: true);
   }
 
-  Future<void> clearTable(String table) async {
-    await db.delete(table);
-  }
-
-  /// Atomically replace the contents of several tables in one transaction.
-  /// If anything fails mid-way the old cache survives intact — never leave
-  /// the offline cache half-cleared.
-  Future<void> replaceAll(Map<String, List<Map<String, dynamic>>> tables) async {
+  /// Merge a server snapshot into local tables WITHOUT destroying local data.
+  ///
+  /// Per row: upsert only when the incoming `updated_at` is >= the local one
+  /// (last-write-wins; ISO-8601 strings compare correctly). Tombstoned rows
+  /// (deleted_at set) are upserted like any other — the read APIs filter them
+  /// out. Crucially, local rows the server did NOT mention are left untouched,
+  /// so an offline-created or newer-local record is never silently deleted.
+  Future<void> mergeAll(Map<String, List<Map<String, dynamic>>> tables) async {
     await db.transaction((txn) async {
       for (final entry in tables.entries) {
-        await txn.delete(entry.key);
-        final batch = txn.batch();
-        for (final r in entry.value) {
-          batch.insert(entry.key, _toSqlite(r),
-              conflictAlgorithm: ConflictAlgorithm.replace);
+        final table = entry.key;
+        for (final incoming in entry.value) {
+          final id = incoming['id'];
+          if (id == null) continue;
+          final incomingTs =
+              (incoming['updated_at'] ?? incoming['created_at'] ?? '')
+                  .toString();
+          final existing = await txn.query(table,
+              columns: ['updated_at'],
+              where: 'id = ?',
+              whereArgs: [id],
+              limit: 1);
+          if (existing.isEmpty) {
+            await txn.insert(table, _toSqlite(incoming),
+                conflictAlgorithm: ConflictAlgorithm.replace);
+          } else {
+            final localTs = (existing.first['updated_at'] ?? '').toString();
+            // >= so a server echo of our own write (equal timestamp) still lands.
+            if (incomingTs.compareTo(localTs) >= 0) {
+              await txn.insert(table, _toSqlite(incoming),
+                  conflictAlgorithm: ConflictAlgorithm.replace);
+            }
+            // else: local copy is newer — keep it (last-write-wins).
+          }
         }
-        await batch.commit(noResult: true);
       }
     });
+  }
+
+  /// Optimistically write a single row locally (used so an edit shows up
+  /// immediately even while offline).
+  Future<void> localUpsert(String table, Map<String, dynamic> row) async {
+    await db.insert(table, _toSqlite(row),
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  /// Optimistically tombstone a single row locally.
+  Future<void> localTombstone(
+      String table, String id, String deletedAt) async {
+    await db.update(
+      table,
+      {'deleted_at': deletedAt, 'updated_at': deletedAt},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// Optimistically apply a partial update to a local row and bump its
+  /// updated_at, so an edit shows immediately and survives the next merge
+  /// (last-write-wins) even before it reaches the backend.
+  Future<void> localPatch(
+      String table, String id, Map<String, dynamic> patch, String now) async {
+    final rows =
+        await db.query(table, where: 'id = ?', whereArgs: [id], limit: 1);
+    if (rows.isEmpty) return;
+    final merged = Map<String, dynamic>.from(rows.first)
+      ..addAll(patch)
+      ..['updated_at'] = now;
+    await db.insert(table, _toSqlite(merged),
+        conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Map<String, dynamic> _toSqlite(Map<String, dynamic> r) {
@@ -223,17 +346,54 @@ class LocalDb {
     return out;
   }
 
-  // Read APIs (typed)
+  // ── Outbox helpers ─────────────────────────────────────────
+
+  Future<int> enqueueOp({
+    required String entity,
+    required String entityId,
+    required String op,
+    String? payloadJson,
+    required String queuedAt,
+  }) {
+    return db.insert('pending_ops', {
+      'entity': entity,
+      'entity_id': entityId,
+      'op': op,
+      'payload': payloadJson,
+      'queued_at': queuedAt,
+    });
+  }
+
+  Future<List<Map<String, Object?>>> pendingOps() {
+    return db.query('pending_ops', orderBy: 'op_id ASC');
+  }
+
+  Future<void> removeOp(int opId) async {
+    await db.delete('pending_ops', where: 'op_id = ?', whereArgs: [opId]);
+  }
+
+  Future<int> pendingOpCount() async {
+    final r =
+        await db.rawQuery('SELECT COUNT(*) AS c FROM pending_ops');
+    return (r.first['c'] as int?) ?? 0;
+  }
+
+  // ── Read APIs (typed) — all hide soft-deleted rows ─────────
+
+  /// Compose `deleted_at IS NULL` with an optional caller clause.
+  String _activeWhere([String? extra]) =>
+      extra == null ? 'deleted_at IS NULL' : 'deleted_at IS NULL AND $extra';
 
   Future<List<Trip>> trips() async {
-    final rows = await db.query('trips', orderBy: 'start_date');
+    final rows = await db.query('trips',
+        where: 'deleted_at IS NULL', orderBy: 'start_date');
     return rows.map((r) => Trip.fromJson(_clean(r))).toList();
   }
 
   Future<List<Leg>> legs({String? tripId}) async {
     final rows = await db.query(
       'legs',
-      where: tripId == null ? null : 'trip_id = ?',
+      where: tripId == null ? _activeWhere() : _activeWhere('trip_id = ?'),
       whereArgs: tripId == null ? null : [tripId],
       orderBy: 'sort_order',
     );
@@ -241,8 +401,8 @@ class LocalDb {
   }
 
   Future<Leg?> leg(String id) async {
-    final rows =
-        await db.query('legs', where: 'id = ?', whereArgs: [id], limit: 1);
+    final rows = await db.query('legs',
+        where: _activeWhere('id = ?'), whereArgs: [id], limit: 1);
     if (rows.isEmpty) return null;
     return Leg.fromJson(_clean(rows.first));
   }
@@ -250,7 +410,7 @@ class LocalDb {
   Future<List<Booking>> bookings({String? legId}) async {
     final rows = await db.query(
       'bookings',
-      where: legId == null ? null : 'leg_id = ?',
+      where: legId == null ? _activeWhere() : _activeWhere('leg_id = ?'),
       whereArgs: legId == null ? null : [legId],
       orderBy: 'start_date',
     );
@@ -258,7 +418,7 @@ class LocalDb {
   }
 
   Future<List<Task>> tasks({String? legId, bool? done}) async {
-    final clauses = <String>[];
+    final clauses = <String>['deleted_at IS NULL'];
     final args = <Object?>[];
     if (legId != null) {
       clauses.add('leg_id = ?');
@@ -270,7 +430,7 @@ class LocalDb {
     }
     final rows = await db.query(
       'tasks',
-      where: clauses.isEmpty ? null : clauses.join(' AND '),
+      where: clauses.join(' AND '),
       whereArgs: args.isEmpty ? null : args,
       orderBy: 'is_done, due_date',
     );
@@ -280,7 +440,7 @@ class LocalDb {
   Future<List<PackingItem>> packing({String? tripId}) async {
     final rows = await db.query(
       'packing_items',
-      where: tripId == null ? null : 'trip_id = ?',
+      where: tripId == null ? _activeWhere() : _activeWhere('trip_id = ?'),
       whereArgs: tripId == null ? null : [tripId],
       orderBy: 'category, sort_order',
     );
@@ -290,7 +450,7 @@ class LocalDb {
   Future<List<JournalEntry>> journal({String? legId}) async {
     final rows = await db.query(
       'journal_entries',
-      where: legId == null ? null : 'leg_id = ?',
+      where: legId == null ? _activeWhere() : _activeWhere('leg_id = ?'),
       whereArgs: legId == null ? null : [legId],
       orderBy: 'created_at DESC',
     );
@@ -298,7 +458,8 @@ class LocalDb {
   }
 
   Future<Briefing?> latestBriefing() async {
-    final rows = await db.query('briefings', orderBy: 'date DESC', limit: 1);
+    final rows = await db.query('briefings',
+        where: 'deleted_at IS NULL', orderBy: 'date DESC', limit: 1);
     if (rows.isEmpty) return null;
     return Briefing.fromJson(_clean(rows.first));
   }
@@ -317,7 +478,8 @@ class LocalDb {
   }
 
   /// Cast a sqflite row to Map<String, dynamic> and normalize 0/1 → bool for
-  /// the columns the Freezed models expect as bool.
+  /// the columns the Freezed models expect as bool. Extra columns the models
+  /// don't declare (e.g. deleted_at) are ignored by their fromJson.
   Map<String, dynamic> _clean(Map<String, Object?> row) {
     final m = Map<String, dynamic>.from(row);
     for (final k in _boolColumns) {
