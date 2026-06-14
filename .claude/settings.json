@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flutter:*)",
+      "Bash(curl:*)",
+      "Bash(grep:*)",
+      "Bash(find:*)",
+      "Bash(node:*)",
+      "Bash(ls:*)",
+      "Bash(git:*)",
+      "Read",
+      "Edit",
+      "Write"
+    ]
+  }
+}

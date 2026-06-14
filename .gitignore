@@ -48,3 +48,4 @@ backend/secrets/*
 # MCP config may embed API keys
 .mcp.json
 
+.worktrees/
