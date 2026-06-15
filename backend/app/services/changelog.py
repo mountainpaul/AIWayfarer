@@ -20,6 +20,8 @@ ENTITY_TABLE = {
     "trip": "trip",
     "leg": "leg",
     "traveler_profile": "traveler_profile",
+    "trip_review": "trip_review",
+    "review_item": "review_item",
 }
 
 

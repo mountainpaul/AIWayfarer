@@ -269,6 +269,63 @@ class TravelerProfileUpdate(BaseModel):
     preferences_blob: Optional[dict] = None
 
 
+# ── Post-trip review (Step 3) ───────────────────────────────────
+
+ReviewSubjectType = Literal["stay", "activity", "transport", "food", "leg", "other"]
+PaceFeedback = Literal["too_packed", "just_right", "too_slow"]
+
+
+class ReviewItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    review_id: str
+    leg_id: Optional[str] = None       # the actual leg this rates, if any
+    booking_id: Optional[str] = None   # the actual booking this rates, if any
+    subject_type: ReviewSubjectType
+    subject_label: str                 # denormalized name captured at review time
+    rating: Optional[int] = None       # 1..5
+    liked: Optional[str] = None
+    disliked: Optional[str] = None
+    created_at: str
+    updated_at: str
+    deleted_at: Optional[str] = None
+
+
+class ReviewItemCreate(BaseModel):
+    leg_id: Optional[str] = None
+    booking_id: Optional[str] = None
+    subject_type: ReviewSubjectType
+    subject_label: str
+    rating: Optional[int] = None
+    liked: Optional[str] = None
+    disliked: Optional[str] = None
+
+
+class TripReview(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    trip_id: str
+    overall_rating: Optional[int] = None
+    pace_feedback: Optional[PaceFeedback] = None
+    highlight: Optional[str] = None
+    lowlight: Optional[str] = None
+    free_text: Optional[str] = None
+    items: list[ReviewItem] = Field(default_factory=list)
+    created_at: str
+    updated_at: str
+    deleted_at: Optional[str] = None
+
+
+class TripReviewCreate(BaseModel):
+    trip_id: str
+    overall_rating: Optional[int] = None
+    pace_feedback: Optional[PaceFeedback] = None
+    highlight: Optional[str] = None
+    lowlight: Optional[str] = None
+    free_text: Optional[str] = None
+    items: list[ReviewItemCreate] = Field(default_factory=list)
+
+
 # ── Grounding ───────────────────────────────────────────────────
 
 class GPS(BaseModel):
