@@ -1,6 +1,6 @@
 import sqlite3
 from datetime import date as date_cls
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException
 
 from ..db import get_db
 from ..models import Briefing, BriefingGenerateRequest
@@ -37,10 +37,11 @@ def generate(payload: BriefingGenerateRequest, db: sqlite3.Connection = Depends(
     return Briefing(**row)
 
 
-@router.get("/today", response_class=Response)
+@router.get("/today", response_model=Briefing)
 def today(db: sqlite3.Connection = Depends(get_db)):
-    """Return the latest cached briefing as raw markdown."""
+    """Return the latest cached briefing as JSON (id/date/markdown), matching
+    the Flutter client which parses it into a Briefing and caches it locally."""
     row = BriefingRepository(db).latest()
     if not row:
         raise HTTPException(status_code=404, detail="no briefing has been generated yet")
-    return Response(content=row["markdown"], media_type="text/markdown")
+    return Briefing(**row)

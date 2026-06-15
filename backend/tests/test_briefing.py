@@ -88,10 +88,13 @@ def test_briefing_generate_is_idempotent_on_same_date():
     assert rows["n"] == 1
 
 
-def test_briefing_today_returns_markdown_content_type():
+def test_briefing_today_returns_json_briefing():
     client.post("/api/v1/briefing/generate", json={"date": "2026-04-18"})
     r = client.get("/api/v1/briefing/today")
     assert r.status_code == 200
-    assert r.headers["content-type"].startswith("text/markdown")
-    # Content is either deterministic ("# Briefing") or Claude-rephrased.
-    assert len(r.text) > 20, "briefing should have meaningful content"
+    assert r.headers["content-type"].startswith("application/json")
+    body = r.json()
+    # The Flutter client parses this into a Briefing (needs id/date/markdown).
+    assert body["date"]
+    assert body["id"]
+    assert len(body["markdown"]) > 20, "briefing should have meaningful content"
