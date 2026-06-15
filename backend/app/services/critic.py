@@ -3,6 +3,7 @@ Critic prompt — the v0.5 single-Claude collapsed pipeline (spec §3.2).
 
 The 6-point checklist below is verbatim from spec §3.3. The confidence rule is from §3.4.
 """
+from typing import Optional
 
 CRITIC_CHECKLIST = """\
 Before showing the answer to Paul, run this 6-point self-check on the draft.
@@ -58,19 +59,38 @@ clarifying question instead of a guess.
 """
 
 
-def build_system_prompt(grounding_block: str, mode: str) -> str:
-    """Build the system prompt. Stable across a session for prompt caching."""
+def build_system_prompt(
+    grounding_block: str,
+    mode: str,
+    profile_summary: Optional[str] = None,
+) -> str:
+    """Build the system prompt. Stable across a session for prompt caching.
+
+    `profile_summary` is the distilled traveler-profile paragraph. It is stable
+    across a session (changes per-trip, not per-message), so it rides inside the
+    cached system block alongside the identity/checklist/format text.
+    """
     mode_note = {
         "planning": "You are in PLANNING mode. Paul is at home preparing the trip. Focus on research, options, tradeoffs, bookings.",
         "companion": "You are in COMPANION mode. Paul is on the trip right now. Focus on immediate decisions, navigation, schedule changes, journal-worthy moments.",
     }.get(mode, "You are in COMPANION mode.")
+
+    profile_section = ""
+    if profile_summary:
+        profile_section = f"""\
+Traveler profile (Paul's learned, stable preferences — weight these when
+proposing options, but defer to anything in the grounding context or this
+conversation if it conflicts):
+{profile_summary}
+
+"""
 
     return f"""\
 You are Wayfarer, a travel planning and live-companion assistant for Paul Egges.
 
 {mode_note}
 
-{CRITIC_CHECKLIST}
+{profile_section}{CRITIC_CHECKLIST}
 
 {CONFIDENCE_RULE}
 

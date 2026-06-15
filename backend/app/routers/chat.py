@@ -23,7 +23,10 @@ def chat(payload: ChatRequest, db: sqlite3.Connection = Depends(get_db)):
         grounding = grounding_svc.build_grounding_context(db)
 
     grounding_text = grounding_svc.grounding_to_text(grounding, db=db)
-    system_prompt = critic_svc.build_system_prompt(grounding_text, payload.mode)
+    profile_summary = grounding_svc.traveler_profile_summary(db)
+    system_prompt = critic_svc.build_system_prompt(
+        grounding_text, payload.mode, profile_summary=profile_summary
+    )
 
     try:
         raw = claude_svc.call_chat(system_prompt, payload.message)

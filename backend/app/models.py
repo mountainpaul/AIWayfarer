@@ -238,6 +238,37 @@ class JournalEntryCreate(BaseModel):
     location_lon: Optional[float] = None
 
 
+# ── Traveler Profile ────────────────────────────────────────────
+
+class TravelerProfile(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: str
+    user_id: str
+    # Permanent typed columns (standardized string tokens; values illustrative,
+    # not yet constrained — kept flexible while the questionnaire stabilizes).
+    lodging_style: Optional[str] = None        # boutique | luxury | budget_guesthouse | ...
+    transport_preference: Optional[str] = None  # rental_car | public_transit | trains | ...
+    travel_pace: Optional[str] = None           # relaxed | moderate | packed
+    budget_tier: Optional[str] = None           # economy | mid_range | splurge
+    # Distilled AI paragraph injected into the chat grounding layer.
+    profile_summary: Optional[str] = None
+    # JSON sandbox for evolving questionnaire fields, tags, and avoids.
+    preferences_blob: dict = Field(default_factory=dict)
+    created_at: str
+    updated_at: str
+    deleted_at: Optional[str] = None
+
+
+class TravelerProfileUpdate(BaseModel):
+    lodging_style: Optional[str] = None
+    transport_preference: Optional[str] = None
+    travel_pace: Optional[str] = None
+    budget_tier: Optional[str] = None
+    profile_summary: Optional[str] = None
+    # When provided, replaces the blob wholesale (merge semantics can come later).
+    preferences_blob: Optional[dict] = None
+
+
 # ── Grounding ───────────────────────────────────────────────────
 
 class GPS(BaseModel):

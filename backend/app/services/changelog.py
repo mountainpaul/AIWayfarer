@@ -19,6 +19,7 @@ ENTITY_TABLE = {
     "packing": "packing_item",
     "trip": "trip",
     "leg": "leg",
+    "traveler_profile": "traveler_profile",
 }
 
 

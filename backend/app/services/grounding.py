@@ -8,10 +8,27 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from ..models import GroundingPayload
+from ..repositories.traveler_profile_repository import (
+    DEFAULT_USER_ID,
+    TravelerProfileRepository,
+)
 
 
 def _row_to_dict(row: sqlite3.Row | None) -> Optional[dict]:
     return dict(row) if row is not None else None
+
+
+def traveler_profile_summary(
+    db: sqlite3.Connection,
+    user_id: str = DEFAULT_USER_ID,
+) -> Optional[str]:
+    """Distilled traveler-profile paragraph for the system prompt, or None.
+
+    Kept separate from enrich_grounding_text(): the profile is stable across a
+    session (it changes per-trip, not per-message), so the chat router injects
+    it into the *cached* system block rather than the volatile grounding text.
+    """
+    return TravelerProfileRepository(db).summary_for(user_id)
 
 
 def find_current_leg(db: sqlite3.Connection, date: str) -> Optional[dict]:
