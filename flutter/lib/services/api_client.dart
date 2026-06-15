@@ -1,4 +1,5 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -11,6 +12,7 @@ import '../models/journal_entry.dart';
 import '../models/leg.dart';
 import '../models/packing_item.dart';
 import '../models/task.dart';
+import '../models/traveler_profile.dart';
 import '../models/trip.dart';
 
 /// Holds the configurable base URL so settings can change it at runtime.
@@ -39,16 +41,24 @@ final apiClientProvider = Provider<ApiClient>((ref) {
 });
 
 class ApiClient {
-  ApiClient({required String baseUrl})
-      : _dio = Dio(
-          BaseOptions(
-            baseUrl: _withApiV1(baseUrl),
-            connectTimeout: const Duration(seconds: 10),
-            receiveTimeout: const Duration(seconds: 60),
-            sendTimeout: const Duration(seconds: 30),
-            headers: {'Content-Type': 'application/json'},
-          ),
-        );
+  /// [dio] is injectable purely for tests — pass a Dio with a fake
+  /// HttpClientAdapter to exercise the endpoints without a network. In
+  /// production it's omitted and a Dio is built from [baseUrl].
+  ApiClient({required String baseUrl, Dio? dio})
+      : _dio = dio ??
+            Dio(
+              BaseOptions(
+                baseUrl: _withApiV1(baseUrl),
+                connectTimeout: const Duration(seconds: 10),
+                receiveTimeout: const Duration(seconds: 60),
+                sendTimeout: const Duration(seconds: 30),
+                headers: {'Content-Type': 'application/json'},
+              ),
+            );
+
+  /// The resolved base URL (with the /api/v1 suffix applied). Exposed for tests.
+  @visibleForTesting
+  String get resolvedBaseUrl => _dio.options.baseUrl;
 
   /// All routes are versioned under /api/v1 (BEST_PRACTICES §4). The stored
   /// base URL is just the host (e.g. http://localhost:8000), so the version
@@ -267,6 +277,19 @@ class ApiClient {
       options: Options(receiveTimeout: const Duration(minutes: 5)),
     );
     return ChatResponse.fromJson(r.data!);
+  }
+
+  // ── Traveler profile ─────────────────────────────────────
+  /// Fetch the singleton traveler profile. GET auto-creates an empty one
+  /// server-side on first access, so this never 404s.
+  Future<TravelerProfile> getProfile() async {
+    final r = await _dio.get<Map<String, dynamic>>('/profile');
+    return TravelerProfile.fromJson(r.data!);
+  }
+
+  Future<TravelerProfile> patchProfile(Map<String, dynamic> patch) async {
+    final r = await _dio.patch<Map<String, dynamic>>('/profile', data: patch);
+    return TravelerProfile.fromJson(r.data!);
   }
 
   // ── Grounding ────────────────────────────────────────────

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../providers/quiet_mode_provider.dart';
 import '../../services/api_client.dart';
@@ -106,6 +107,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               }
             },
           ),
+        ),
+        const Divider(height: 32),
+        ListTile(
+          leading: const Icon(Icons.person_outline),
+          title: const Text('Travel profile'),
+          subtitle: const Text(
+              'Preferences that ground trip planning (lodging, pace, interests).'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => context.go('/profile'),
         ),
         const Divider(height: 32),
         const Padding(

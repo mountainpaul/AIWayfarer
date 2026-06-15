@@ -7,6 +7,7 @@ import '../features/chat/chat_screen.dart';
 import '../features/companion/companion_dashboard.dart';
 import '../features/home/home_screen.dart';
 import '../features/settings/settings_screen.dart';
+import '../features/settings/travel_profile_screen.dart';
 import '../features/trips/email_scan_screen.dart';
 import '../features/trips/leg_detail_screen.dart';
 import '../features/trips/trips_screen.dart';
@@ -54,6 +55,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/settings',
             builder: (_, __) => const SettingsScreen(),
+          ),
+          GoRoute(
+            path: '/profile',
+            builder: (_, __) => const TravelProfileScreen(),
           ),
         ],
       ),
@@ -183,6 +188,8 @@ class _ShellScaffold extends ConsumerWidget {
     if (loc.startsWith('/trips')) return 2;
     if (loc.startsWith('/companion')) return 3;
     if (loc.startsWith('/settings')) return 4;
+    // The travel-profile screen is reached from Settings; keep that tab lit.
+    if (loc.startsWith('/profile')) return 4;
     return 0;
   }
 
