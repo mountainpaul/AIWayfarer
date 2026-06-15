@@ -125,12 +125,27 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           physics: const NeverScrollableScrollPhysics(),
           onPageChanged: (i) => setState(() => _page = i),
           children: [
-            _buildWelcomePage(),
+            _scrollablePage(child: _buildWelcomePage()),
             _buildUrlPage(),
-            _buildPermissionsPage(),
-            _buildSyncPage(),
+            _scrollablePage(child: _buildPermissionsPage()),
+            _scrollablePage(child: _buildSyncPage()),
             _buildDemoPage(),
           ],
+        ),
+      ),
+    );
+  }
+
+  /// Keep page content vertically centered when it fits, but scroll instead of
+  /// overflowing on shorter viewports (large system font, landscape, or a
+  /// lingering keyboard). Used for the text-field-free centered pages; the URL
+  /// page and the demo page manage their own layout.
+  Widget _scrollablePage({required Widget child}) {
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: IntrinsicHeight(child: child),
         ),
       ),
     );

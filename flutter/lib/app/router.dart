@@ -149,7 +149,11 @@ class _ShellScaffold extends ConsumerWidget {
     return Scaffold(
       appBar: appBar,
       body: child,
-      bottomNavigationBar: NavigationBar(
+      bottomNavigationBar: MediaQuery.withClampedTextScaling(
+        // Clamp system font scaling for the nav bar so a long label like
+        // "Companion" stays on one line instead of wrapping.
+        maxScaleFactor: 1.0,
+        child: NavigationBar(
         selectedIndex: index,
         onDestinationSelected: (i) => _go(context, i),
         destinations: const [
@@ -179,6 +183,7 @@ class _ShellScaffold extends ConsumerWidget {
             label: 'Settings',
           ),
         ],
+        ),
       ),
     );
   }
