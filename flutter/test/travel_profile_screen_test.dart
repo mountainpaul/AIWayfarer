@@ -48,9 +48,35 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Travel Profile'), findsOneWidget);
-    expect(find.text('Lodging style'), findsOneWidget);
+    expect(find.text('Lodging styles'), findsOneWidget); // multi-select header
+    expect(find.widgetWithText(FilterChip, 'Boutique'), findsOneWidget);
     expect(find.text('Likes slow travel.'), findsOneWidget); // summary card
     expect(find.text('Save profile'), findsOneWidget);
+  });
+
+  testWidgets('lodging is multi-select; save sends a comma-joined token list',
+      (tester) async {
+    _tallSurface(tester);
+    final api = _FakeApi();
+    await tester.pumpWidget(_app([
+      apiClientProvider.overrideWithValue(api),
+      profileProvider.overrideWith((ref) async => const TravelerProfile(
+            id: '1',
+            userId: 'paul',
+            lodgingStyle: 'boutique', // pre-selected
+          )),
+    ]));
+    await tester.pumpAndSettle();
+
+    // Add a second lodging style, then save.
+    await tester.tap(find.widgetWithText(FilterChip, 'Luxury'));
+    await tester.pump();
+    await tester.tap(find.text('Save profile'));
+    await tester.pumpAndSettle();
+
+    expect(api.lastPatch, isNotNull);
+    // Stable order comes from the options list (boutique before luxury).
+    expect(api.lastPatch!['lodging_style'], 'boutique,luxury');
   });
 
   testWidgets('offline (null) profile shows a notice, no form', (tester) async {

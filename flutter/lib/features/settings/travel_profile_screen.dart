@@ -22,6 +22,7 @@ const _transportOptions = <String>[
   'rental_car',
   'public_transit',
   'trains',
+  'flights',
   'rideshare',
   'walking',
 ];
@@ -54,7 +55,7 @@ class TravelProfileScreen extends ConsumerStatefulWidget {
 class _TravelProfileScreenState extends ConsumerState<TravelProfileScreen> {
   // Local edit state, seeded once from the loaded profile.
   bool _seeded = false;
-  String? _lodging;
+  final Set<String> _lodgingStyles = {};
   String? _transport;
   String? _pace;
   String? _budget;
@@ -69,7 +70,9 @@ class _TravelProfileScreenState extends ConsumerState<TravelProfileScreen> {
   }
 
   void _seed(TravelerProfile p) {
-    _lodging = p.lodgingStyle;
+    _lodgingStyles
+      ..clear()
+      ..addAll(_splitCsv(p.lodgingStyle));
     _transport = p.transportPreference;
     _pace = p.travelPace;
     _budget = p.budgetTier;
@@ -92,7 +95,11 @@ class _TravelProfileScreenState extends ConsumerState<TravelProfileScreen> {
       ..['interests'] = _interests.toList()
       ..['avoids'] = avoids;
     final patch = <String, dynamic>{
-      'lodging_style': _lodging,
+      // Multi-select lodging is stored as a comma-separated token list in the
+      // single TEXT column (stable order from _lodgingOptions); null when none.
+      'lodging_style': _lodgingStyles.isEmpty
+          ? null
+          : _lodgingOptions.where(_lodgingStyles.contains).join(','),
       'transport_preference': _transport,
       'travel_pace': _pace,
       'budget_tier': _budget,
@@ -141,8 +148,7 @@ class _TravelProfileScreenState extends ConsumerState<TravelProfileScreen> {
       children: [
         Text('Preferences', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
-        _dropdown('Lodging style', _lodgingOptions, _lodging,
-            (v) => setState(() => _lodging = v)),
+        _multiSelect('Lodging styles', _lodgingOptions, _lodgingStyles),
         const SizedBox(height: 12),
         _dropdown('Transport preference', _transportOptions, _transport,
             (v) => setState(() => _transport = v)),
@@ -190,6 +196,37 @@ class _TravelProfileScreenState extends ConsumerState<TravelProfileScreen> {
           label: Text(_saving ? 'Saving…' : 'Save profile'),
         ),
         const SizedBox(height: 32),
+      ],
+    );
+  }
+
+  List<String> _splitCsv(String? v) => (v ?? '')
+      .split(',')
+      .map((s) => s.trim())
+      .where((s) => s.isNotEmpty)
+      .toList();
+
+  /// Multi-select chips bound to a mutable [selected] set.
+  Widget _multiSelect(String label, List<String> options, Set<String> selected) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.labelLarge),
+        const SizedBox(height: 4),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            for (final o in options)
+              FilterChip(
+                label: Text(_humanize(o)),
+                selected: selected.contains(o),
+                onSelected: (sel) => setState(() {
+                  sel ? selected.add(o) : selected.remove(o);
+                }),
+              ),
+          ],
+        ),
       ],
     );
   }
