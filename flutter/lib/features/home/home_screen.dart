@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
+import '../../models/trip.dart';
 import '../../providers/briefing_provider.dart';
+import '../../providers/review_provider.dart';
 import '../../providers/trip_provider.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -34,6 +37,14 @@ class HomeScreen extends ConsumerWidget {
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.symmetric(vertical: 12),
         children: [
+          // Post-trip review prompt — shown when a completed trip has no review.
+          ref.watch(tripsNeedingReviewProvider).maybeWhen(
+            data: (trips) => trips.isEmpty
+                ? const SizedBox.shrink()
+                : _ReviewPromptCard(trip: trips.first),
+            orElse: () => const SizedBox.shrink(),
+          ),
+
           // Briefing card. Backend returns markdown (spec §9). For v0.5 we
           // render as plain text — adding a markdown renderer is a polish
           // task tracked in MANUAL_TODO.
@@ -235,6 +246,31 @@ class _CoverageCard extends StatelessWidget {
         leading: const Icon(Icons.hotel, color: Colors.orange),
         title: Text('${gaps.length} leg(s) need lodging'),
         subtitle: Text('Unbooked nights — $summary'),
+      ),
+    );
+  }
+}
+
+class _ReviewPromptCard extends StatelessWidget {
+  const _ReviewPromptCard({required this.trip});
+  final Trip trip;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      color: scheme.tertiaryContainer,
+      child: ListTile(
+        leading: Icon(Icons.rate_review_outlined,
+            color: scheme.onTertiaryContainer),
+        title: Text('How was ${trip.name}?',
+            style: TextStyle(
+                color: scheme.onTertiaryContainer,
+                fontWeight: FontWeight.w600)),
+        subtitle: Text('Tap to add a quick review — it sharpens future planning.',
+            style: TextStyle(color: scheme.onTertiaryContainer)),
+        trailing: Icon(Icons.chevron_right, color: scheme.onTertiaryContainer),
+        onTap: () => context.go('/trips/review/${trip.id}'),
       ),
     );
   }

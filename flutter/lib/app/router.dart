@@ -10,6 +10,7 @@ import '../features/settings/settings_screen.dart';
 import '../features/settings/travel_profile_screen.dart';
 import '../features/trips/email_scan_screen.dart';
 import '../features/trips/leg_detail_screen.dart';
+import '../features/trips/post_trip_review_screen.dart';
 import '../features/trips/trips_screen.dart';
 import '../providers/mode_provider.dart';
 
@@ -45,6 +46,12 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: 'awards',
                 builder: (_, __) => const AwardsScreen(),
+              ),
+              GoRoute(
+                path: 'review/:tripId',
+                builder: (context, state) => PostTripReviewScreen(
+                  tripId: state.pathParameters['tripId']!,
+                ),
               ),
             ],
           ),

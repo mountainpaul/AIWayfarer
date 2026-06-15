@@ -14,6 +14,7 @@ import '../models/packing_item.dart';
 import '../models/task.dart';
 import '../models/traveler_profile.dart';
 import '../models/trip.dart';
+import '../models/trip_review.dart';
 
 /// Holds the configurable base URL so settings can change it at runtime.
 /// Hydrated eagerly in `main()` from SharedPreferences via the provider override
@@ -290,6 +291,30 @@ class ApiClient {
   Future<TravelerProfile> patchProfile(Map<String, dynamic> patch) async {
     final r = await _dio.patch<Map<String, dynamic>>('/profile', data: patch);
     return TravelerProfile.fromJson(r.data!);
+  }
+
+  // ── Post-trip review ─────────────────────────────────────
+  Future<List<TripReview>> listReviews() async {
+    final r = await _dio.get<List<dynamic>>('/reviews');
+    return (r.data ?? [])
+        .map((e) => TripReview.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// The review for a trip, or null when none exists (404).
+  Future<TripReview?> getReview(String tripId) async {
+    try {
+      final r = await _dio.get<Map<String, dynamic>>('/reviews/$tripId');
+      return TripReview.fromJson(r.data!);
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
+  Future<TripReview> createReview(Map<String, dynamic> body) async {
+    final r = await _dio.post<Map<String, dynamic>>('/reviews', data: body);
+    return TripReview.fromJson(r.data!);
   }
 
   // ── Grounding ────────────────────────────────────────────
