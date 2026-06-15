@@ -6,6 +6,10 @@ __pycache__/
 venv/
 .env
 
+# Coverage artifacts
+backend/.coverage
+flutter/coverage/
+
 # Flutter
 flutter/build/
 flutter/.dart_tool/

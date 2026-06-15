@@ -36,6 +36,7 @@ dev_dependencies:
   freezed: ^2.5.0
   json_serializable: ^6.8.0
   build_runner: ^2.4.0
+  sqflite_common_ffi: ^2.3.0 # in-memory SQLite for LocalDb unit tests (VM)
 
 flutter:
   uses-material-design: true

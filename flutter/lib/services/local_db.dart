@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -25,6 +25,13 @@ class LocalDb {
   LocalDb._();
   static final LocalDb instance = LocalDb._();
 
+  /// A fresh, isolated instance for tests — the process-wide [instance] singleton
+  /// would otherwise leak state across cases. Pair with
+  /// `init(pathOverride: inMemoryDatabasePath)` (after setting the ffi
+  /// databaseFactory) and [close] in tearDown.
+  @visibleForTesting
+  factory LocalDb.newForTest() => LocalDb._();
+
   /// Bump when the local schema changes; see [_onUpgrade].
   static const _schemaVersion = 4;
 
@@ -37,10 +44,14 @@ class LocalDb {
     return d;
   }
 
-  Future<void> init() async {
+  /// [pathOverride] bypasses path_provider (unavailable on the test VM); pass
+  /// `inMemoryDatabasePath` in tests. Production calls init() with no args.
+  Future<void> init({String? pathOverride}) async {
     if (_db != null) return;
     late final String path;
-    if (kIsWeb) {
+    if (pathOverride != null) {
+      path = pathOverride;
+    } else if (kIsWeb) {
       path = Env.dbFileName;
     } else {
       final dir = await getApplicationDocumentsDirectory();
@@ -55,6 +66,13 @@ class LocalDb {
       onCreate: _createSchema,
       onUpgrade: _onUpgrade,
     );
+  }
+
+  /// Close and forget the handle so a test instance can be recreated cleanly.
+  @visibleForTesting
+  Future<void> close() async {
+    await _db?.close();
+    _db = null;
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
