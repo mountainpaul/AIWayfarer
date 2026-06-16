@@ -522,4 +522,33 @@ void main() {
       expect(find.text('completed'), findsOneWidget);
     });
   });
+
+  group('Add leg button', () {
+    testWidgets('renders an Add leg button for a single trip', (tester) async {
+      _tallSurface(tester);
+      await tester.pumpWidget(
+        _appWithRouter([
+          legsProvider.overrideWith((_) async => []),
+          tripsProvider.overrideWith((_) async => [_trip1]),
+        ]),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Add leg'), findsOneWidget);
+    });
+
+    testWidgets('renders an Add leg button for each trip', (tester) async {
+      _tallSurface(tester);
+      await tester.pumpWidget(
+        _appWithRouter([
+          legsProvider.overrideWith((_) async => [_leg1, _leg2]),
+          tripsProvider.overrideWith((_) async => [_trip1, _trip2]),
+        ]),
+      );
+      await tester.pumpAndSettle();
+
+      // One Add leg button per trip (two trips → two buttons).
+      expect(find.text('Add leg'), findsNWidgets(2));
+    });
+  });
 }

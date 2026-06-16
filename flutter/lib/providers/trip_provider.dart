@@ -160,6 +160,16 @@ class TripMutations {
     }
   }
 
+  Future<bool> createLeg(Map<String, dynamic> payload) async {
+    try {
+      await ref.read(apiClientProvider).createLeg(payload);
+      await _refresh();
+      return true;
+    } catch (_) {
+      return false; // create is online-only for now
+    }
+  }
+
   Future<bool> updateTrip(String id, Map<String, dynamic> patch) async {
     try {
       await ref.read(apiClientProvider).patchTrip(id, patch);

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
 import '../../providers/trip_provider.dart';
+import 'widgets/leg_form.dart';
 import 'widgets/trip_form.dart';
 
 class TripsScreen extends ConsumerWidget {
@@ -32,6 +33,19 @@ class TripsScreen extends ConsumerWidget {
     if (!ok && context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Failed to create trip')),
+      );
+    }
+  }
+
+  Future<void> _addLeg(BuildContext context, WidgetRef ref, String tripId,
+      int sortOrder) async {
+    final payload =
+        await showLegForm(context, tripId: tripId, sortOrder: sortOrder);
+    if (payload == null) return;
+    final ok = await ref.read(tripMutationsProvider).createLeg(payload);
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to add leg')),
       );
     }
   }
@@ -170,6 +184,22 @@ class TripsScreen extends ConsumerWidget {
                             ),
                           ),
                         ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          icon: const Icon(Icons.add),
+                          label: const Text('Add leg'),
+                          onPressed: () => _addLeg(
+                            context,
+                            ref,
+                            trip.id,
+                            legList.where((l) => l.tripId == trip.id).length,
+                          ),
+                        ),
+                      ),
+                    ),
                   ],
                   const SizedBox(height: 80), // clear the FAB
                 ],

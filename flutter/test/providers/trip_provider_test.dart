@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:wayfarer/models/booking.dart';
 import 'package:wayfarer/models/journal_entry.dart';
+import 'package:wayfarer/models/leg.dart';
 import 'package:wayfarer/models/packing_item.dart';
 import 'package:wayfarer/models/task.dart';
 import 'package:wayfarer/models/trip.dart';
@@ -159,6 +160,22 @@ class _FakeApi extends ApiClient {
       id: 'new-je',
       content: body['content'] as String? ?? '',
       entryType: body['entry_type'] as String? ?? 'note',
+    );
+  }
+
+  // ── Legs ───────────────────────────────────────────────────────────────
+
+  @override
+  Future<Leg> createLeg(Map<String, dynamic> body) async {
+    _maybeThrow('createLeg');
+    calls.add('createLeg');
+    return Leg(
+      id: 'new-leg',
+      tripId: body['trip_id'] as String? ?? 'trip-1',
+      slug: 'new-leg',
+      name: body['name'] as String? ?? 'New Leg',
+      startDate: body['start_date'] as String? ?? '2026-06-01',
+      endDate: body['end_date'] as String? ?? '2026-06-30',
     );
   }
 
@@ -670,6 +687,55 @@ void main() {
       await _mutations(c).updateBooking('bk-b', {'notes': 'edit 2'});
 
       expect(await db.pendingOpCount(), 2);
+    });
+  });
+
+  // ── TripMutations.createLeg ───────────────────────────────────────────────
+
+  group('TripMutations.createLeg', () {
+    test('success: calls createLeg API, bumps syncTrigger, returns true',
+        () async {
+      final api = _FakeApi();
+      final (c, _) = await _makeContainer(api);
+      final before = c.read(syncTriggerProvider);
+
+      final ok = await _mutations(c).createLeg({
+        'trip_id': 'trip-1',
+        'name': 'Austria',
+        'start_date': '2026-08-06',
+        'end_date': '2026-08-20',
+        'is_schengen': true,
+        'sort_order': 1,
+      });
+
+      expect(ok, isTrue);
+      expect(api.calls, contains('createLeg'));
+      expect(c.read(syncTriggerProvider), greaterThan(before));
+    });
+
+    test('failure: fake throws → returns false', () async {
+      final api = _FakeApi()..throwOn = ApiUnreachable('down');
+      final (c, _) = await _makeContainer(api);
+
+      final ok = await _mutations(c).createLeg({
+        'trip_id': 'trip-1',
+        'name': 'Austria',
+        'start_date': '2026-08-06',
+        'end_date': '2026-08-20',
+        'sort_order': 1,
+      });
+
+      expect(ok, isFalse);
+      expect(api.calls, isNot(contains('createLeg')));
+    });
+
+    test('server rejection returns false', () async {
+      final api = _FakeApi()..throwOn = _serverRejection(422);
+      final (c, _) = await _makeContainer(api);
+
+      final ok = await _mutations(c).createLeg({'name': 'x', 'trip_id': 't'});
+
+      expect(ok, isFalse);
     });
   });
 }

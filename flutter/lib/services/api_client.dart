@@ -142,6 +142,12 @@ class ApiClient {
     return Leg.fromJson(r.data!);
   }
 
+  /// Create a leg. The server generates the slug from the name when omitted.
+  Future<Leg> createLeg(Map<String, dynamic> body) async {
+    final r = await _dio.post<Map<String, dynamic>>('/legs', data: body);
+    return Leg.fromJson(r.data!);
+  }
+
   Future<Leg> patchLeg(String id, Map<String, dynamic> patch) async {
     final r = await _dio.patch<Map<String, dynamic>>('/legs/$id', data: patch);
     return Leg.fromJson(r.data!);

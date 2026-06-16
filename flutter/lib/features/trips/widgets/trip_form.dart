@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'date_range_field.dart';
+
 /// Shows the add/edit-trip dialog. Returns a create/update payload map, or null
 /// if cancelled. [existing] (a Trip-shaped map) prefills for editing.
 Future<Map<String, dynamic>?> showTripForm(
@@ -11,9 +13,6 @@ Future<Map<String, dynamic>?> showTripForm(
     builder: (_) => _TripFormDialog(existing: existing),
   );
 }
-
-String _fmt(DateTime d) =>
-    '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
 class _TripFormDialog extends StatefulWidget {
   const _TripFormDialog({this.existing});
@@ -28,6 +27,7 @@ class _TripFormDialogState extends State<_TripFormDialog> {
   late final TextEditingController _nameCtrl;
   DateTime? _start;
   DateTime? _end;
+  bool _datesError = false;
 
   bool get _isEditing => widget.existing != null;
 
@@ -46,37 +46,28 @@ class _TripFormDialogState extends State<_TripFormDialog> {
     super.dispose();
   }
 
-  Future<void> _pick(bool isStart) async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: (isStart ? _start : _end) ?? now,
-      firstDate: DateTime(now.year - 2),
-      lastDate: DateTime(now.year + 5),
-    );
-    if (picked != null) {
-      setState(() => isStart ? _start = picked : _end = picked);
-    }
-  }
-
   void _submit() {
-    if (!_formKey.currentState!.validate()) return;
-    if (_start == null || _end == null) return;
+    final nameOk = _formKey.currentState!.validate();
+    final datesOk = _start != null && _end != null;
+    if (!datesOk) setState(() => _datesError = true);
+    if (!nameOk || !datesOk) return;
     Navigator.pop(context, {
       'name': _nameCtrl.text.trim(),
-      'start_date': _fmt(_start!),
-      'end_date': _fmt(_end!),
+      'start_date': fmtDate(_start!),
+      'end_date': fmtDate(_end!),
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return AlertDialog(
       title: Text(_isEditing ? 'Edit trip' : 'New trip'),
       content: Form(
         key: _formKey,
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             TextFormField(
               controller: _nameCtrl,
@@ -84,24 +75,24 @@ class _TripFormDialogState extends State<_TripFormDialog> {
               validator: (v) =>
                   (v == null || v.trim().isEmpty) ? 'Required' : null,
             ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => _pick(true),
-                    child: Text(_start != null ? _fmt(_start!) : 'Start date'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: () => _pick(false),
-                    child: Text(_end != null ? _fmt(_end!) : 'End date'),
-                  ),
-                ),
-              ],
+            const SizedBox(height: 12),
+            DateRangeField(
+              start: _start,
+              end: _end,
+              hasError: _datesError,
+              label: 'Pick dates',
+              onPicked: (s, e) => setState(() {
+                _start = s;
+                _end = e;
+                _datesError = false;
+              }),
             ),
+            if (_datesError)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text('Pick a date range',
+                    style: TextStyle(color: scheme.error, fontSize: 12)),
+              ),
           ],
         ),
       ),
