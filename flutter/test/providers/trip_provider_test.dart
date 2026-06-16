@@ -134,6 +134,49 @@ class _FakeApi extends ApiClient {
     return Task(id: id, title: 'Task', priority: 'medium', isDone: true);
   }
 
+  // ── Legs (extended) ──────────────────────────────────────────────────
+
+  @override
+  Future<Leg> patchLeg(String id, Map<String, dynamic> patch) async {
+    _maybeThrow('patchLeg');
+    calls.add('patchLeg:$id');
+    return Leg(
+      id: id,
+      tripId: 'trip-1',
+      slug: 'updated-leg',
+      name: patch['name'] as String? ?? 'Leg',
+      startDate: patch['start_date'] as String? ?? '2026-06-01',
+      endDate: patch['end_date'] as String? ?? '2026-06-30',
+    );
+  }
+
+  @override
+  Future<void> deleteLeg(String id) async {
+    _maybeThrow('deleteLeg');
+    calls.add('deleteLeg:$id');
+  }
+
+  // ── Packing (extended) ─────────────────────────────────────────────────
+
+  @override
+  Future<PackingItem> createPacking(Map<String, dynamic> body) async {
+    _maybeThrow('createPacking');
+    calls.add('createPacking');
+    return PackingItem(
+      id: 'new-pk',
+      tripId: body['trip_id'] as String? ?? 'trip-1',
+      category: body['category'] as String? ?? 'misc',
+      name: body['name'] as String? ?? 'Item',
+      sortOrder: 0,
+    );
+  }
+
+  @override
+  Future<void> deletePacking(String id) async {
+    _maybeThrow('deletePacking');
+    calls.add('deletePacking:$id');
+  }
+
   // ── Packing ────────────────────────────────────────────────────────────
 
   @override
@@ -687,6 +730,159 @@ void main() {
       await _mutations(c).updateBooking('bk-b', {'notes': 'edit 2'});
 
       expect(await db.pendingOpCount(), 2);
+    });
+  });
+
+  // ── TripMutations.updateLeg ───────────────────────────────────────────────
+
+  group('TripMutations.updateLeg', () {
+    test('success: calls patchLeg API, bumps syncTrigger, returns true',
+        () async {
+      final api = _FakeApi();
+      final (c, _) = await _makeContainer(api);
+      final before = c.read(syncTriggerProvider);
+
+      final ok = await _mutations(c).updateLeg('leg-1', {'name': 'Updated'});
+
+      expect(ok, isTrue);
+      expect(api.calls, contains('patchLeg:leg-1'));
+      expect(c.read(syncTriggerProvider), greaterThan(before));
+    });
+
+    test('failure: fake throws → returns false', () async {
+      final api = _FakeApi()..throwOn = ApiUnreachable('down');
+      final (c, _) = await _makeContainer(api);
+
+      final ok = await _mutations(c).updateLeg('leg-1', {'name': 'x'});
+
+      expect(ok, isFalse);
+      expect(api.calls, isNot(contains('patchLeg:leg-1')));
+    });
+
+    test('server rejection returns false', () async {
+      final api = _FakeApi()..throwOn = _serverRejection(422);
+      final (c, _) = await _makeContainer(api);
+
+      final ok = await _mutations(c).updateLeg('leg-1', {'name': 'x'});
+
+      expect(ok, isFalse);
+    });
+  });
+
+  // ── TripMutations.deleteLeg ───────────────────────────────────────────────
+
+  group('TripMutations.deleteLeg', () {
+    test('success: calls deleteLeg API, bumps syncTrigger, returns true',
+        () async {
+      final api = _FakeApi();
+      final (c, _) = await _makeContainer(api);
+      final before = c.read(syncTriggerProvider);
+
+      final ok = await _mutations(c).deleteLeg('leg-42');
+
+      expect(ok, isTrue);
+      expect(api.calls, contains('deleteLeg:leg-42'));
+      expect(c.read(syncTriggerProvider), greaterThan(before));
+    });
+
+    test('failure: fake throws → returns false', () async {
+      final api = _FakeApi()..throwOn = ApiUnreachable('down');
+      final (c, _) = await _makeContainer(api);
+
+      final ok = await _mutations(c).deleteLeg('leg-42');
+
+      expect(ok, isFalse);
+      expect(api.calls, isNot(contains('deleteLeg:leg-42')));
+    });
+
+    test('server rejection returns false', () async {
+      final api = _FakeApi()..throwOn = _serverRejection(403);
+      final (c, _) = await _makeContainer(api);
+
+      final ok = await _mutations(c).deleteLeg('leg-x');
+
+      expect(ok, isFalse);
+    });
+  });
+
+  // ── TripMutations.createPacking ───────────────────────────────────────────
+
+  group('TripMutations.createPacking', () {
+    test('success: calls createPacking API, bumps syncTrigger, returns true',
+        () async {
+      final api = _FakeApi();
+      final (c, _) = await _makeContainer(api);
+      final before = c.read(syncTriggerProvider);
+
+      final ok = await _mutations(c).createPacking({
+        'trip_id': 'trip-1',
+        'name': 'Rain jacket',
+        'category': 'clothing',
+      });
+
+      expect(ok, isTrue);
+      expect(api.calls, contains('createPacking'));
+      expect(c.read(syncTriggerProvider), greaterThan(before));
+    });
+
+    test('failure: fake throws → returns false', () async {
+      final api = _FakeApi()..throwOn = ApiUnreachable('down');
+      final (c, _) = await _makeContainer(api);
+
+      final ok = await _mutations(c).createPacking({
+        'trip_id': 'trip-1',
+        'name': 'Item',
+        'category': 'misc',
+      });
+
+      expect(ok, isFalse);
+      expect(api.calls, isNot(contains('createPacking')));
+    });
+
+    test('server rejection returns false', () async {
+      final api = _FakeApi()..throwOn = _serverRejection(422);
+      final (c, _) = await _makeContainer(api);
+
+      final ok = await _mutations(c)
+          .createPacking({'trip_id': 'x', 'name': 'x', 'category': 'misc'});
+
+      expect(ok, isFalse);
+    });
+  });
+
+  // ── TripMutations.deletePacking ───────────────────────────────────────────
+
+  group('TripMutations.deletePacking', () {
+    test('success: calls deletePacking API, bumps syncTrigger, returns true',
+        () async {
+      final api = _FakeApi();
+      final (c, _) = await _makeContainer(api);
+      final before = c.read(syncTriggerProvider);
+
+      final ok = await _mutations(c).deletePacking('pk-99');
+
+      expect(ok, isTrue);
+      expect(api.calls, contains('deletePacking:pk-99'));
+      expect(c.read(syncTriggerProvider), greaterThan(before));
+    });
+
+    test('failure: fake throws → returns false', () async {
+      final api = _FakeApi()..throwOn = ApiUnreachable('down');
+      final (c, _) = await _makeContainer(api);
+
+      final ok = await _mutations(c).deletePacking('pk-99');
+
+      expect(ok, isFalse);
+      expect(api.calls, isNot(contains('deletePacking:pk-99')));
+    });
+
+    test('server rejection returns false', () async {
+      final api = _FakeApi()..throwOn = _serverRejection(404);
+      final (c, _) = await _makeContainer(api);
+
+      final ok = await _mutations(c).deletePacking('pk-x');
+
+      expect(ok, isFalse);
     });
   });
 

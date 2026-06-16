@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:wayfarer/features/trips/leg_detail_screen.dart';
 import 'package:wayfarer/models/booking.dart';
 import 'package:wayfarer/models/journal_entry.dart';
@@ -106,6 +107,29 @@ class _FakeApi extends ApiClient {
   _FakeApi() : super(baseUrl: 'http://test.local');
 }
 
+/// Recording TripMutations — captures updateLeg / deleteLeg calls.
+class _RecordingMutations extends TripMutations {
+  _RecordingMutations(super.ref);
+
+  String? updatedLegId;
+  Map<String, dynamic>? updatedPatch;
+  String? deletedLegId;
+  bool returnValue = true;
+
+  @override
+  Future<bool> updateLeg(String id, Map<String, dynamic> patch) async {
+    updatedLegId = id;
+    updatedPatch = patch;
+    return returnValue;
+  }
+
+  @override
+  Future<bool> deleteLeg(String id) async {
+    deletedLegId = id;
+    return returnValue;
+  }
+}
+
 Widget _app(List<Override> overrides) => ProviderScope(
       overrides: [
         apiClientProvider.overrideWithValue(_FakeApi()),
@@ -113,6 +137,31 @@ Widget _app(List<Override> overrides) => ProviderScope(
       ],
       child: const MaterialApp(home: LegDetailScreen(legId: _legId)),
     );
+
+/// App wrapper that uses GoRouter so context.go('/trips') works when
+/// deleteLeg succeeds and the screen navigates away.
+Widget _appWithRouter(List<Override> overrides) {
+  final router = GoRouter(
+    initialLocation: '/leg',
+    routes: [
+      GoRoute(
+        path: '/leg',
+        builder: (_, __) => const LegDetailScreen(legId: _legId),
+      ),
+      GoRoute(
+        path: '/trips',
+        builder: (_, __) => const Scaffold(body: Text('trips-list')),
+      ),
+    ],
+  );
+  return ProviderScope(
+    overrides: [
+      apiClientProvider.overrideWithValue(_FakeApi()),
+      ...overrides,
+    ],
+    child: MaterialApp.router(routerConfig: router),
+  );
+}
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
@@ -580,6 +629,146 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('New journal entry'), findsNothing);
+    });
+  });
+
+  // ── LegDetailScreen – header popup menu (Edit / Delete) ───────────────────
+
+  group('LegDetailScreen – header popup menu', () {
+    testWidgets('popup menu contains "Edit leg" and "Delete leg" items',
+        (tester) async {
+      _tallSurface(tester);
+      await tester.pumpWidget(
+        _app([
+          legProvider(_legId).overrideWith((_) async => _leg),
+          bookingsForLegProvider(_legId).overrideWith((_) async => []),
+          tasksForLegProvider(_legId).overrideWith((_) async => []),
+          packingForTripProvider(_tripId).overrideWith((_) async => []),
+          journalForLegProvider(_legId).overrideWith((_) async => []),
+        ]),
+      );
+      await tester.pumpAndSettle();
+
+      // Open the popup menu in the header.
+      await tester.tap(find.byType(PopupMenuButton<String>));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Edit leg'), findsOneWidget);
+      expect(find.text('Delete leg'), findsOneWidget);
+    });
+
+    testWidgets('tapping "Delete leg" shows confirm dialog with "Delete leg?" title',
+        (tester) async {
+      _tallSurface(tester);
+      await tester.pumpWidget(
+        _app([
+          legProvider(_legId).overrideWith((_) async => _leg),
+          bookingsForLegProvider(_legId).overrideWith((_) async => []),
+          tasksForLegProvider(_legId).overrideWith((_) async => []),
+          packingForTripProvider(_tripId).overrideWith((_) async => []),
+          journalForLegProvider(_legId).overrideWith((_) async => []),
+          tripMutationsProvider
+              .overrideWith((ref) => _RecordingMutations(ref)),
+        ]),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(PopupMenuButton<String>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete leg'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Delete leg?'), findsOneWidget);
+      expect(find.text('Cancel'), findsOneWidget);
+      expect(find.text('Delete'), findsOneWidget);
+    });
+
+    testWidgets('cancelling the delete dialog does not call deleteLeg',
+        (tester) async {
+      _tallSurface(tester);
+      _RecordingMutations? captured;
+      await tester.pumpWidget(
+        _app([
+          legProvider(_legId).overrideWith((_) async => _leg),
+          bookingsForLegProvider(_legId).overrideWith((_) async => []),
+          tasksForLegProvider(_legId).overrideWith((_) async => []),
+          packingForTripProvider(_tripId).overrideWith((_) async => []),
+          journalForLegProvider(_legId).overrideWith((_) async => []),
+          tripMutationsProvider.overrideWith((ref) {
+            captured = _RecordingMutations(ref);
+            return captured!;
+          }),
+        ]),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(PopupMenuButton<String>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete leg'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cancel'));
+      await tester.pumpAndSettle();
+
+      expect(captured?.deletedLegId, isNull);
+    });
+
+    testWidgets('confirming delete calls deleteLeg and navigates to /trips',
+        (tester) async {
+      _tallSurface(tester);
+      _RecordingMutations? captured;
+      await tester.pumpWidget(
+        _appWithRouter([
+          legProvider(_legId).overrideWith((_) async => _leg),
+          bookingsForLegProvider(_legId).overrideWith((_) async => []),
+          tasksForLegProvider(_legId).overrideWith((_) async => []),
+          packingForTripProvider(_tripId).overrideWith((_) async => []),
+          journalForLegProvider(_legId).overrideWith((_) async => []),
+          tripMutationsProvider.overrideWith((ref) {
+            captured = _RecordingMutations(ref);
+            return captured!;
+          }),
+        ]),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(PopupMenuButton<String>));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete leg'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
+
+      expect(captured?.deletedLegId, _legId);
+      // Navigated to /trips stub.
+      expect(find.text('trips-list'), findsOneWidget);
+    });
+  });
+
+  // ── LegDetailScreen – Packing tab add FAB ─────────────────────────────────
+
+  group('LegDetailScreen – Packing tab add FAB', () {
+    testWidgets('Packing tab has an add_packing FloatingActionButton',
+        (tester) async {
+      _tallSurface(tester);
+      await tester.pumpWidget(
+        _app([
+          legProvider(_legId).overrideWith((_) async => _leg),
+          bookingsForLegProvider(_legId).overrideWith((_) async => []),
+          tasksForLegProvider(_legId).overrideWith((_) async => []),
+          packingForTripProvider(_tripId).overrideWith((_) async => []),
+          journalForLegProvider(_legId).overrideWith((_) async => []),
+        ]),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Packing'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.byWidgetPredicate(
+            (w) => w is FloatingActionButton && w.heroTag == 'add_packing'),
+        findsOneWidget,
+      );
     });
   });
 }

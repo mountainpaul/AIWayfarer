@@ -8,6 +8,7 @@ import '../../models/trip.dart';
 import '../../providers/briefing_provider.dart';
 import '../../providers/review_provider.dart';
 import '../../providers/trip_provider.dart';
+import '../../services/api_client.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -50,7 +51,7 @@ class HomeScreen extends ConsumerWidget {
           // task tracked in MANUAL_TODO.
           briefing.when(
             data: (b) => b == null
-                ? const _EmptyCard(text: 'No briefing yet. Pull to refresh.')
+                ? const _GenerateBriefingCard()
                 : Card(
                     child: Padding(
                       padding: const EdgeInsets.all(16),
@@ -271,6 +272,60 @@ class _ReviewPromptCard extends StatelessWidget {
             style: TextStyle(color: scheme.onTertiaryContainer)),
         trailing: Icon(Icons.chevron_right, color: scheme.onTertiaryContainer),
         onTap: () => context.go('/trips/review/${trip.id}'),
+      ),
+    );
+  }
+}
+
+/// Today has no briefing yet — offer to generate one on demand (calls the
+/// backend's Claude-backed generator, then refreshes the briefing).
+class _GenerateBriefingCard extends ConsumerStatefulWidget {
+  const _GenerateBriefingCard();
+  @override
+  ConsumerState<_GenerateBriefingCard> createState() =>
+      _GenerateBriefingCardState();
+}
+
+class _GenerateBriefingCardState extends ConsumerState<_GenerateBriefingCard> {
+  bool _busy = false;
+
+  Future<void> _generate() async {
+    setState(() => _busy = true);
+    try {
+      await ref.read(apiClientProvider).generateBriefing();
+      ref.invalidate(briefingProvider);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('Could not generate — backend unreachable')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            const Expanded(child: Text('No briefing yet for today.')),
+            FilledButton.icon(
+              onPressed: _busy ? null : _generate,
+              icon: _busy
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.auto_awesome),
+              label: Text(_busy ? 'Generating…' : 'Generate'),
+            ),
+          ],
+        ),
       ),
     );
   }

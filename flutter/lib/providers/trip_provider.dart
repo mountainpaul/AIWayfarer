@@ -170,6 +170,46 @@ class TripMutations {
     }
   }
 
+  Future<bool> updateLeg(String id, Map<String, dynamic> patch) async {
+    try {
+      await ref.read(apiClientProvider).patchLeg(id, patch);
+      await _refresh();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> deleteLeg(String id) async {
+    try {
+      await ref.read(apiClientProvider).deleteLeg(id);
+      await _refresh();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> createPacking(Map<String, dynamic> payload) async {
+    try {
+      await ref.read(apiClientProvider).createPacking(payload);
+      await _refresh();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> deletePacking(String id) async {
+    try {
+      await ref.read(apiClientProvider).deletePacking(id);
+      await _refresh();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<bool> updateTrip(String id, Map<String, dynamic> patch) async {
     try {
       await ref.read(apiClientProvider).patchTrip(id, patch);

@@ -130,6 +130,22 @@ void main() {
       });
     });
 
+    // ── deleteLeg ──────────────────────────────────────────────────────────
+
+    group('deleteLeg', () {
+      test('DELETEs /legs/:id with the correct method and path', () async {
+        final f = fakeDio((req) => jsonResponse(null, status: 204));
+        final client = ApiClient(baseUrl: 'http://test.local', dio: f.dio);
+
+        await client.deleteLeg('leg-99');
+
+        expect(f.adapter.requests, hasLength(1));
+        final req = f.adapter.requests.first;
+        expect(req.method, equals('DELETE'));
+        expect(req.path, endsWith('/legs/leg-99'));
+      });
+    });
+
     // ── listLegs ───────────────────────────────────────────────────────────
 
     group('listLegs', () {

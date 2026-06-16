@@ -153,6 +153,10 @@ class ApiClient {
     return Leg.fromJson(r.data!);
   }
 
+  Future<void> deleteLeg(String id) async {
+    await _dio.delete<void>('/legs/$id');
+  }
+
   // ── Bookings ─────────────────────────────────────────────
   Future<List<Booking>> listBookings({String? legId}) async {
     final r = await _dio.get<List<dynamic>>('/bookings',

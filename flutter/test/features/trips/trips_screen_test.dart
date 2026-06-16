@@ -303,6 +303,22 @@ void main() {
       expect(find.text('Delete trip'), findsOneWidget);
     });
 
+    testWidgets('popup menu includes "Edit trip" item', (tester) async {
+      _tallSurface(tester);
+      await tester.pumpWidget(
+        _appWithRouter([
+          legsProvider.overrideWith((_) async => []),
+          tripsProvider.overrideWith((_) async => [_trip1]),
+        ]),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byType(PopupMenuButton<String>).first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Edit trip'), findsOneWidget);
+    });
+
     testWidgets('tapping delete trip opens confirmation dialog', (tester) async {
       _tallSurface(tester);
       await tester.pumpWidget(

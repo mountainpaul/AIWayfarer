@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../app/theme.dart';
+import '../../models/leg.dart';
 import '../../providers/trip_provider.dart';
 import '../awards/award_search_sheet.dart';
 import 'widgets/booking_form.dart';
 import 'widgets/booking_tile.dart';
 import 'widgets/journal_tile.dart';
+import 'widgets/leg_form.dart';
+import 'widgets/packing_form.dart';
 import 'widgets/packing_tile.dart';
 import 'widgets/task_form.dart';
 import 'widgets/task_tile.dart';
@@ -53,6 +57,17 @@ class LegDetailScreen extends ConsumerWidget {
                       onPressed: () =>
                           showAwardSearchSheet(context, legId: legId),
                     ),
+                    PopupMenuButton<String>(
+                      onSelected: (v) {
+                        if (v == 'edit') _editLeg(context, ref, leg);
+                        if (v == 'delete') _deleteLeg(context, ref, leg);
+                      },
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(value: 'edit', child: Text('Edit leg')),
+                        PopupMenuItem(
+                            value: 'delete', child: Text('Delete leg')),
+                      ],
+                    ),
                   ],
                 ),
               ),
@@ -81,6 +96,57 @@ class LegDetailScreen extends ConsumerWidget {
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text('$e')),
     );
+  }
+
+  Future<void> _editLeg(BuildContext context, WidgetRef ref, Leg leg) async {
+    final payload = await showLegForm(
+      context,
+      tripId: leg.tripId,
+      sortOrder: leg.sortOrder,
+      existing: {
+        'name': leg.name,
+        'start_date': leg.startDate,
+        'end_date': leg.endDate,
+        'places': leg.places,
+        'notes': leg.notes,
+        'is_schengen': leg.isSchengen,
+      },
+    );
+    if (payload == null) return;
+    final ok = await ref.read(tripMutationsProvider).updateLeg(leg.id, payload);
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to update leg')),
+      );
+    }
+  }
+
+  Future<void> _deleteLeg(BuildContext context, WidgetRef ref, Leg leg) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete leg?'),
+        content: Text('Remove "${leg.name}"? It can be restored from history.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              child: const Text('Delete')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final ok = await ref.read(tripMutationsProvider).deleteLeg(leg.id);
+    if (!context.mounted) return;
+    if (ok) {
+      context.go('/trips'); // leg is gone — back to the list
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to delete leg')),
+      );
+    }
   }
 }
 
@@ -174,15 +240,40 @@ class _PackingTab extends ConsumerWidget {
   const _PackingTab({required this.tripId});
   final String tripId;
 
+  Future<void> _addItem(BuildContext context, WidgetRef ref) async {
+    final payload = await showPackingForm(context, tripId: tripId);
+    if (payload == null) return;
+    final ok = await ref.read(tripMutationsProvider).createPacking(payload);
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to add item')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final items = ref.watch(packingForTripProvider(tripId));
-    return items.when(
-      data: (list) => list.isEmpty
-          ? const Center(child: Text('No packing items.'))
-          : ListView(children: list.map((i) => PackingTile(item: i)).toList()),
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, _) => Center(child: Text('$e')),
+    return Stack(
+      children: [
+        items.when(
+          data: (list) => list.isEmpty
+              ? const Center(child: Text('No packing items.'))
+              : ListView(
+                  children: list.map((i) => PackingTile(item: i)).toList()),
+          loading: () => const Center(child: CircularProgressIndicator()),
+          error: (e, _) => Center(child: Text('$e')),
+        ),
+        Positioned(
+          right: 16,
+          bottom: 16,
+          child: FloatingActionButton(
+            heroTag: 'add_packing',
+            onPressed: () => _addItem(context, ref),
+            child: const Icon(Icons.add),
+          ),
+        ),
+      ],
     );
   }
 }

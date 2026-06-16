@@ -12,11 +12,18 @@ class _FakeMutations extends TripMutations {
   _FakeMutations() : super(_NullRef());
 
   String? toggledItemId;
+  String? deletedItemId;
   bool returnValue = true;
 
   @override
   Future<bool> togglePacked(String id) async {
     toggledItemId = id;
+    return returnValue;
+  }
+
+  @override
+  Future<bool> deletePacking(String id) async {
+    deletedItemId = id;
     return returnValue;
   }
 }
@@ -160,6 +167,57 @@ void main() {
       await tester.pumpWidget(_wrap(_unpackedItem, mutations: mutations));
 
       await tester.tap(find.byType(Checkbox));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Offline - writes disabled'), findsNothing);
+    });
+
+    // ── Delete icon button ────────────────────────────────────────────────
+
+    testWidgets('delete IconButton with Icons.delete_outline is present',
+        (tester) async {
+      await tester.pumpWidget(_wrap(_unpackedItem));
+      expect(find.byIcon(Icons.delete_outline), findsOneWidget);
+    });
+
+    testWidgets('tapping delete icon calls deletePacking with item id',
+        (tester) async {
+      final mutations = _FakeMutations();
+      await tester.pumpWidget(_wrap(_unpackedItem, mutations: mutations));
+
+      await tester.tap(find.byIcon(Icons.delete_outline));
+      await tester.pumpAndSettle();
+
+      expect(mutations.deletedItemId, 'pi-1');
+    });
+
+    testWidgets('tapping delete on a different item passes the correct id',
+        (tester) async {
+      final mutations = _FakeMutations();
+      await tester.pumpWidget(_wrap(_packedItem, mutations: mutations));
+
+      await tester.tap(find.byIcon(Icons.delete_outline));
+      await tester.pumpAndSettle();
+
+      expect(mutations.deletedItemId, 'pi-2');
+    });
+
+    testWidgets('deletePacking failure (returns false) shows offline snackbar',
+        (tester) async {
+      final mutations = _FakeMutations()..returnValue = false;
+      await tester.pumpWidget(_wrap(_unpackedItem, mutations: mutations));
+
+      await tester.tap(find.byIcon(Icons.delete_outline));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Offline - writes disabled'), findsOneWidget);
+    });
+
+    testWidgets('successful delete shows no snackbar', (tester) async {
+      final mutations = _FakeMutations(); // returnValue = true by default
+      await tester.pumpWidget(_wrap(_unpackedItem, mutations: mutations));
+
+      await tester.tap(find.byIcon(Icons.delete_outline));
       await tester.pumpAndSettle();
 
       expect(find.text('Offline - writes disabled'), findsNothing);

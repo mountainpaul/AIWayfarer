@@ -50,6 +50,21 @@ class TripsScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _editTrip(BuildContext context, WidgetRef ref, dynamic trip) async {
+    final payload = await showTripForm(context, existing: {
+      'name': trip.name,
+      'start_date': trip.startDate,
+      'end_date': trip.endDate,
+    });
+    if (payload == null) return;
+    final ok = await ref.read(tripMutationsProvider).updateTrip(trip.id, payload);
+    if (!ok && context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to update trip')),
+      );
+    }
+  }
+
   Future<void> _setStatus(WidgetRef ref, String id, String status) =>
       ref.read(tripMutationsProvider).updateTrip(id, {'status': status});
 
@@ -100,13 +115,16 @@ class TripsScreen extends ConsumerWidget {
           ),
           PopupMenuButton<String>(
             onSelected: (v) {
-              if (v == 'delete') {
+              if (v == 'edit') {
+                _editTrip(context, ref, trip);
+              } else if (v == 'delete') {
                 _deleteTrip(context, ref, trip.id, trip.name);
               } else {
                 _setStatus(ref, trip.id, v);
               }
             },
             itemBuilder: (_) => const [
+              PopupMenuItem(value: 'edit', child: Text('Edit trip')),
               PopupMenuItem(value: 'planning', child: Text('Mark planning')),
               PopupMenuItem(value: 'active', child: Text('Mark active')),
               PopupMenuItem(value: 'completed', child: Text('Mark completed')),

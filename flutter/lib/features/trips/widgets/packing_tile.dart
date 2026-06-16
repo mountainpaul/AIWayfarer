@@ -33,6 +33,19 @@ class PackingTile extends ConsumerWidget {
           ),
         ),
         subtitle: Text(item.category),
+        trailing: IconButton(
+          icon: const Icon(Icons.delete_outline),
+          tooltip: 'Remove item',
+          onPressed: () async {
+            final ok =
+                await ref.read(tripMutationsProvider).deletePacking(item.id);
+            if (!ok && context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Offline - writes disabled')),
+              );
+            }
+          },
+        ),
       ),
     );
   }
