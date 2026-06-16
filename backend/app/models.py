@@ -66,7 +66,8 @@ class Leg(BaseModel):
 
 class LegCreate(BaseModel):
     trip_id: str
-    slug: str
+    # Optional: the server generates a unique slug from name when omitted.
+    slug: Optional[str] = None
     name: str
     emoji: Optional[str] = None
     color: Optional[str] = None

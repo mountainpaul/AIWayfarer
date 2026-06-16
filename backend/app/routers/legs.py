@@ -46,7 +46,11 @@ def get_leg(leg_id: str, db: sqlite3.Connection = Depends(get_db)):
 def create_leg(payload: LegCreate, db: sqlite3.Connection = Depends(get_db)):
     if TripRepository(db).get(payload.trip_id) is None:
         raise HTTPException(status_code=400, detail="trip_id does not exist")
-    row = LegRepository(db).create(payload.model_dump())
+    repo = LegRepository(db)
+    data = payload.model_dump()
+    if not data.get("slug"):
+        data["slug"] = repo.unique_slug(data["name"])
+    row = repo.create(data)
     return Leg(**row)
 
 
